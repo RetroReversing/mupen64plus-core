@@ -20,6 +20,7 @@
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.          *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
+#define USE_LIBOPCODES_GE_2_29 1
 #include <string.h>
 
 #include "api/callbacks.h"
