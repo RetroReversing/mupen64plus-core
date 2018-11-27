@@ -204,9 +204,9 @@ ifeq ($(OS), OSX)
 
   ifeq ($(CPU), X86)
     ifeq ($(ARCH_DETECTED), 64BITS)
-      CFLAGS += -pipe -arch x86_64 -mmacosx-version-min=10.6 -isysroot $(OSX_SDK_PATH)
+      CFLAGS += -pipe -arch x86_64 -mmacosx-version-min=10.14 -isysroot $(OSX_SDK_PATH)
     else
-      CFLAGS += -pipe -mmmx -msse -arch i686 -mmacosx-version-min=10.6 -isysroot $(OSX_SDK_PATH)
+      CFLAGS += -pipe -mmmx -msse -arch i686 -mmacosx-version-min=10.14 -isysroot $(OSX_SDK_PATH)
       ifneq ($(PROFILE), 1)
         CFLAGS += -fomit-frame-pointer
       endif
@@ -458,6 +458,7 @@ OBJDIR = _obj$(POSTFIX)
 SUBDIR = ../../subprojects
 
 # list of required source files for compilation
+# $(SRCDIR)/cdl/CDL_MemoryMapper.cpp 
 SOURCE = \
     $(SRCDIR)/api/callbacks.c \
     $(SRCDIR)/api/common.c \
@@ -640,7 +641,7 @@ ifeq ($(DEBUGGER), 1)
     $(SRCDIR)/debugger/dbg_decoder.c \
     $(SRCDIR)/debugger/dbg_memory.c \
     $(SRCDIR)/debugger/dbg_breakpoints.c
-  LDLIBS += -lopcodes -lbfd
+  LDLIBS += -lopcodes -lbfd -L/usr/local/opt/binutils/lib -liberty -lintl -liconv
 
   # UGLY libopcodes version check (we check for > 2.28)
   LIBOPCODES_VERSION := $(shell $(STRINGS) --version | head -n1 | rev | cut -d ' ' -f1 | rev)
