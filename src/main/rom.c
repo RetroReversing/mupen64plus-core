@@ -232,10 +232,13 @@ m64p_error open_rom(const unsigned char* romimage, unsigned int size)
     return M64ERR_SUCCESS;
 }
 
+extern void write_rom_mapping();
+
 m64p_error close_rom(void)
 {
     /* Clear Byte-swapped flag, since ROM is now deleted. */
     g_RomWordsLittleEndian = 0;
+    write_rom_mapping();
     DebugMessage(M64MSG_STATUS, "Rom closed.");
 
     return M64ERR_SUCCESS;

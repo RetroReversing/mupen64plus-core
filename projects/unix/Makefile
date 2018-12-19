@@ -460,6 +460,7 @@ SUBDIR = ../../subprojects
 # list of required source files for compilation
 # $(SRCDIR)/cdl/CDL_MemoryMapper.cpp 
 SOURCE = \
+    $(SRCDIR)/cdl/CDL_interface.cpp \
     $(SRCDIR)/api/callbacks.c \
     $(SRCDIR)/api/common.c \
     $(SRCDIR)/api/config.c \
@@ -503,7 +504,7 @@ SOURCE = \
     $(SRCDIR)/device/r4300/tlb.c \
     $(SRCDIR)/device/rcp/ai/ai_controller.c \
     $(SRCDIR)/device/rcp/mi/mi_controller.c \
-    $(SRCDIR)/device/rcp/pi/pi_controller.c \
+    $(SRCDIR)/device/rcp/pi/pi_controller.cpp \
     $(SRCDIR)/device/rcp/rdp/fb.c \
     $(SRCDIR)/device/rcp/rdp/rdp_core.c \
     $(SRCDIR)/device/rcp/ri/ri_controller.c \
