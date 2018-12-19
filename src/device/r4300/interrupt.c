@@ -146,6 +146,7 @@ unsigned int add_random_interrupt_time(struct r4300_core* r4300)
 
 void add_interrupt_event(struct cp0* cp0, int type, unsigned int delay)
 {
+    // printf("add_interrupt_event type: %d delay: %d \n",type, delay);
     const uint32_t* cp0_regs = r4300_cp0_regs(cp0);
     add_interrupt_event_count(cp0, type, cp0_regs[CP0_COUNT_REG] + delay);
 }

@@ -278,10 +278,12 @@ uint32_t *fast_mem_access(struct r4300_core* r4300, uint32_t address)
         if (address == 0) // TLB exception
             return NULL;
     }
+    // address >= 0x80000000
+    // printf("address: %#08x check: %#08x check2: %#08x\n", address, (address & UINT32_C(0xc0000000)), UINT32_C(0x80000000));
 
     address &= UINT32_C(0x1ffffffc);
 
-    return mem_base_u32(r4300->mem->base, address);
+    return mem_base_u32(r4300->mem->base, address, 0);
 }
 
 /* Read aligned word from memory.
@@ -315,7 +317,6 @@ int r4300_read_aligned_dword(struct r4300_core* r4300, uint32_t address, uint64_
     if ((address & 0x7) != 0) {
         DebugMessage(M64MSG_WARNING, "Unaligned dword read %08x", address);
     }
-
     if ((address & UINT32_C(0xc0000000)) != UINT32_C(0x80000000)) {
         address = virtual_to_physical_address(r4300, address, 0);
         if (address == 0) {

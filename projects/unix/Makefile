@@ -461,6 +461,7 @@ SUBDIR = ../../subprojects
 # $(SRCDIR)/cdl/CDL_MemoryMapper.cpp 
 SOURCE = \
     $(SRCDIR)/cdl/CDL_interface.cpp \
+    $(SRCDIR)/cdl/CDL_Util.cpp \
     $(SRCDIR)/api/callbacks.c \
     $(SRCDIR)/api/common.c \
     $(SRCDIR)/api/config.c \
@@ -538,6 +539,8 @@ SOURCE += \
     $(SUBDIR)/xxhash/xxhash.c
 CFLAGS += -I$(SUBDIR)/xxhash
 
+CFLAGS += -I/usr/local/opt/nlohmann_json/include
+CXXFLAGS += -I/usr/local/opt/nlohmann_json/include -std=c++11
 
 ifeq ("$(OS)","MINGW")
 SOURCE += \

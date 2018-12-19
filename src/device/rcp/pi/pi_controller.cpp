@@ -19,11 +19,26 @@
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.          *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
+#include <stdio.h>
+#include <map>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+using namespace std; 
+extern std::map<uint, string> registerChanges;
+
+extern "C" {
+#include <iostream>
+
 #include "pi_controller.h"
 
 #define M64P_CORE_PROTOTYPES 1
 #include <stdint.h>
 #include <string.h>
+
+#include <stdio.h>
+
+#include "plugin/plugin.h"
 
 #include "api/callbacks.h"
 #include "api/m64p_types.h"
@@ -56,6 +71,7 @@ static void dma_pi_read(struct pi_controller* pi)
     uint32_t cart_addr = pi->regs[PI_CART_ADDR_REG] & ~UINT32_C(1);
     uint32_t dram_addr = pi->regs[PI_DRAM_ADDR_REG] & ~UINT32_C(7);
     uint32_t length = (pi->regs[PI_RD_LEN_REG] & UINT32_C(0x00fffffe)) + 2;
+    printf("READ: dma_pi_read(struct pi_controller* pi) %#008x",cart_addr);
     const uint8_t* dram = (uint8_t*)pi->ri->rdram->dram;
 
     const struct pi_dma_handler* handler = NULL;
@@ -80,6 +96,23 @@ static void dma_pi_read(struct pi_controller* pi)
     add_interrupt_event(&pi->mi->r4300->cp0, PI_INT, cycles);
 }
 
+void write_rom_mapping();
+
+void printBytes(uint8_t* mem, uint32_t cartAddr);
+
+void backupCart();
+void corruptBytes(uint8_t* mem, uint32_t cartAddr, int times);
+void show_interface();
+void main_state_save(int format, const char *filename);
+
+extern int   l_CurrentFrame;
+extern gfx_plugin_functions gfx;
+extern bool createdCartBackup;
+
+void corrupt_if_in_range(uint8_t* mem, uint32_t proper_cart_address) ;
+
+void log_dma_write(uint8_t* mem, uint32_t proper_cart_address, uint32_t cart_addr, uint32_t length, uint32_t dram_addr);
+
 static void dma_pi_write(struct pi_controller* pi)
 {
     uint32_t cart_addr = pi->regs[PI_CART_ADDR_REG] & ~UINT32_C(1);
@@ -92,6 +125,14 @@ static void dma_pi_write(struct pi_controller* pi)
 
     pi->get_pi_dma_handler(pi->cart, pi->dd, cart_addr, &opaque, &handler);
 
+// Start CDL
+    uint32_t proper_cart_address = cart_addr-0x10000000;
+    struct cart_rom* cart_rom = (struct cart_rom*)opaque;
+    const uint8_t* mem = cart_rom->rom;
+    log_dma_write(cart_rom->rom, proper_cart_address, cart_addr, length, pi->regs[PI_DRAM_ADDR_REG]);
+    corrupt_if_in_range(cart_rom->rom, proper_cart_address);
+// End CDL
+        
     if (handler == NULL) {
         DebugMessage(M64MSG_WARNING, "Unknown PI DMA write: 0x%" PRIX32 " -> 0x%" PRIX32 " (0x%" PRIX32 ")", cart_addr, dram_addr, length);
         return;
@@ -200,3 +241,4 @@ void pi_end_of_dma_event(void* opaque)
 
     raise_rcp_interrupt(pi->mi, MI_INTR_PI);
 }
+} // end extern

@@ -25,6 +25,7 @@
 
 #include "device/memory/memory.h"
 
+// RDRAM Interface
 void init_ri(struct ri_controller* ri, struct rdram* rdram)
 {
     ri->rdram = rdram;

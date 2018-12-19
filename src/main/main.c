@@ -1334,7 +1334,7 @@ m64p_error main_run(void)
 #if !defined(M64P_BIG_ENDIAN)
     if (g_RomWordsLittleEndian == 0)
     {
-        swap_buffer((uint8_t*)mem_base_u32(g_mem_base, MM_CART_ROM), 4, g_rom_size/4);
+        swap_buffer((uint8_t*)mem_base_u32(g_mem_base, MM_CART_ROM, 1), 4, g_rom_size/4);
         g_RomWordsLittleEndian = 1;
     }
 #endif
@@ -1392,7 +1392,7 @@ m64p_error main_run(void)
     const struct storage_backend_interface* dd_idisk = NULL;
     memset(&dd_disk, 0, sizeof(dd_disk));
 
-    load_dd_rom((uint8_t*)mem_base_u32(g_mem_base, MM_DD_ROM), &dd_rom_size);
+    load_dd_rom((uint8_t*)mem_base_u32(g_mem_base, MM_DD_ROM, 1), &dd_rom_size);
     if (dd_rom_size > 0) {
         dd_rtc_iclock = &g_iclock_ctime_plus_delta;
         load_dd_disk(&dd_disk, &dd_idisk);

@@ -17,3 +17,14 @@ void printBytes(uint8_t* mem, uint32_t cartAddr) {
     }
     printf("\n");
 }
+
+string alphabetic_only_name(char* mem, int length) {
+    std::stringstream sstream;
+    for (int i=0; i<=length; i++) {
+        char c = mem[i];
+        if (!isalpha(c)) { continue; }
+        if (c == '!' || c == '^' || c == '+' || c == '/' || c == ':' || c == '%'|| c == '"' || c == '#') { break; }
+        sstream << c;
+    }
+    return sstream.str();
+}

@@ -41,6 +41,7 @@ static void process_cart_command(void* jbd,
     {
     case JCMD_RESET:
         /* TODO: perform internal reset */
+        printf("JCMD_RESET internal reset");
         /* fall through */
     case JCMD_STATUS: {
         JOYBUS_CHECK_COMMAND_FORMAT(1, 3)
@@ -110,6 +111,7 @@ void init_cart(struct cart* cart,
                /* sram */
                void* sram_storage, const struct storage_backend_interface* isram_storage)
 {
+    printf("cart.c init_cart length:%d \n", rom_size);
     init_af_rtc(&cart->af_rtc,
         af_rtc_clock, iaf_rtc_clock);
 
@@ -144,6 +146,7 @@ void poweron_cart(struct cart* cart)
 
 void read_cart_dom2(void* opaque, uint32_t address, uint32_t* value)
 {
+    printf("read_cart_dom2\n");
     struct cart* cart = (struct cart*)opaque;
 
     if (cart->use_flashram == -1)
@@ -165,6 +168,8 @@ void read_cart_dom2(void* opaque, uint32_t address, uint32_t* value)
 
 void write_cart_dom2(void* opaque, uint32_t address, uint32_t value, uint32_t mask)
 {
+        printf("write_cart_dom2\n");
+
     struct cart* cart = (struct cart*)opaque;
 
     if (cart->use_flashram == -1)
@@ -186,6 +191,8 @@ void write_cart_dom2(void* opaque, uint32_t address, uint32_t value, uint32_t ma
 
 unsigned int cart_dom2_dma_read(void* opaque, const uint8_t* dram, uint32_t dram_addr, uint32_t cart_addr, uint32_t length)
 {
+    printf("cart_dom2_dma_read\n");
+
     struct cart* cart = (struct cart*)opaque;
     unsigned int cycles;
 
@@ -204,6 +211,7 @@ unsigned int cart_dom2_dma_read(void* opaque, const uint8_t* dram, uint32_t dram
 
 unsigned int cart_dom2_dma_write(void* opaque, uint8_t* dram, uint32_t dram_addr, uint32_t cart_addr, uint32_t length)
 {
+    printf("cart_dom2_dma_write\n");
     struct cart* cart = (struct cart*)opaque;
     unsigned int cycles;
 
@@ -222,12 +230,14 @@ unsigned int cart_dom2_dma_write(void* opaque, uint8_t* dram, uint32_t dram_addr
 
 unsigned int cart_dom3_dma_read(void* opaque, const uint8_t* dram, uint32_t dram_addr, uint32_t cart_addr, uint32_t length)
 {
+    printf("cart_dom3_dma_read\n");
     struct cart* cart = (struct cart*)opaque;
     return cart_rom_dma_read(&cart->cart_rom, dram, dram_addr, cart_addr, length);
 }
 
 unsigned int cart_dom3_dma_write(void* opaque, uint8_t* dram, uint32_t dram_addr, uint32_t cart_addr, uint32_t length)
 {
+    printf("cart_dom3_dma_write\n");
     struct cart* cart = (struct cart*)opaque;
     return cart_rom_dma_write(&cart->cart_rom, dram, dram_addr, cart_addr, length);
 }

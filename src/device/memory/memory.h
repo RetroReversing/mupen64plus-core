@@ -74,6 +74,7 @@ void init_memory(struct memory* mem,
 
 static osal_inline const struct mem_handler* mem_get_handler(const struct memory* mem, uint32_t address)
 {
+    // printf("mem_get_handler address: %#008x", address);
     return &mem->handlers[address >> 16];
 }
 
@@ -91,7 +92,7 @@ void apply_mem_mapping(struct memory* mem, const struct mem_mapping* mapping);
 
 void* init_mem_base(void);
 void release_mem_base(void* mem_base);
-uint32_t* mem_base_u32(void* mem_base, uint32_t address);
+uint32_t* mem_base_u32(void* mem_base, uint32_t address, int isBootRom);
 
 void read_with_bp_checks(void* opaque, uint32_t address, uint32_t* value);
 void write_with_bp_checks(void* opaque, uint32_t address, uint32_t value, uint32_t mask);

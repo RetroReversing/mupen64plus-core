@@ -39,6 +39,9 @@
 
 static void InterpretOpcode(struct r4300_core* r4300);
 
+int cdl_log_jump(int take_jump, uint32_t jump_target);
+void cdl_log_jump_always(int take_jump, uint32_t jump_target);
+
 #define DECLARE_R4300
 #define PCADDR r4300->interp_PC.addr
 #define ADD_TO_PC(x) r4300->interp_PC.addr += x*4;
@@ -46,9 +49,58 @@ static void InterpretOpcode(struct r4300_core* r4300);
 #define DECLARE_JUMP(name, destination, condition, link, likely, cop1) \
    static void name(struct r4300_core* r4300, uint32_t op) \
    { \
-      const int take_jump = (condition); \
+      int take_jump = (condition); \
       const uint32_t jump_target = (destination); \
       int64_t *link_register = (link); \
+	  take_jump = cdl_log_jump(take_jump, jump_target); \
+      if (cop1 && check_cop1_unusable(r4300)) return; \
+      if (link_register != &r4300_regs(r4300)[0]) \
+      { \
+          *link_register = SE32(r4300->interp_PC.addr + 8); \
+      } \
+      if (!likely || take_jump) \
+      { \
+        r4300->interp_PC.addr += 4; \
+        r4300->delay_slot=1; \
+        InterpretOpcode(r4300); \
+        cp0_update_count(r4300); \
+        r4300->delay_slot=0; \
+        if (take_jump && !r4300->skip_jump) \
+        { \
+          r4300->interp_PC.addr = jump_target; \
+        } \
+      } \
+      else \
+      { \
+         r4300->interp_PC.addr += 8; \
+         cp0_update_count(r4300); \
+      } \
+      r4300->cp0.last_addr = r4300->interp_PC.addr; \
+      if (*r4300_cp0_next_interrupt(&r4300->cp0) <= r4300_cp0_regs(&r4300->cp0)[CP0_COUNT_REG]) gen_interrupt(r4300); \
+   } \
+   static void name##_IDLE(struct r4300_core* r4300, uint32_t op) \
+   { \
+      uint32_t* cp0_regs = r4300_cp0_regs(&r4300->cp0); \
+      const int take_jump = (condition); \
+      int skip; \
+      if (cop1 && check_cop1_unusable(r4300)) return; \
+      if (take_jump) \
+      { \
+         cp0_update_count(r4300); \
+         skip = *r4300_cp0_next_interrupt(&r4300->cp0) - cp0_regs[CP0_COUNT_REG]; \
+         if (skip > 3) cp0_regs[CP0_COUNT_REG] += (skip & UINT32_C(0xFFFFFFFC)); \
+         else name(r4300, op); \
+      } \
+      else name(r4300, op); \
+   }
+
+#define DECLARE_JUMP_ALWAYS(name, destination, condition, link, likely, cop1) \
+   static void name(struct r4300_core* r4300, uint32_t op) \
+   { \
+      int take_jump = (condition); \
+      const uint32_t jump_target = (destination); \
+      int64_t *link_register = (link); \
+	  cdl_log_jump_always(take_jump, jump_target); \
       if (cop1 && check_cop1_unusable(r4300)) return; \
       if (link_register != &r4300_regs(r4300)[0]) \
       { \
@@ -160,12 +212,34 @@ static void InterpretOpcode(struct r4300_core* r4300);
 
 #include "mips_instructions.def"
 
+extern void CDL_PrintMemoryLoc(uint32_t address);
+int smallestFoundEver = 2751463488;
+uint32_t largest = -1;
+uint32_t smallest = -1;
+
+void cdl_log_opcode(uint32_t program_counter, uint32_t* op_address);
+
 void InterpretOpcode(struct r4300_core* r4300)
 {
+	int program_counter = (*r4300_pc(r4300));
 	uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300));
+	cdl_log_opcode(program_counter, op_address);
+	if (largest == -1 && smallest == -1) {
+		largest = program_counter;
+		smallest = program_counter;
+	}
+	if (program_counter > largest) {
+		largest = program_counter;
+		// printf("InterpretOpcode largestPC:%u smallestPC:%u \n", largest, smallest);
+		unsigned char* bytes = ((uint8_t*) op_address);
+		// printf("\nBytes: %x %x %x %x ",bytes[3], bytes[2], bytes[1], bytes[0]);
+	}
 	if (op_address == NULL)
 		return;
 	uint32_t op = *op_address;
+	// DebugMessage("InterpretOpcode PC:%u OpAddress:%u before: %u opcode:%u \n", *r4300_pc(r4300), op_address, op, ((op >> 26) & 0x3F));
+	// printf("InterpretOpcode PC:%u OpAddress:%u program_counter: %u opcode:%u \n", *r4300_pc(r4300), op_address, program_counter, ((op >> 26) & 0x3F));
+
 
 	switch ((op >> 26) & 0x3F) {
 	case 0: /* SPECIAL prefix */

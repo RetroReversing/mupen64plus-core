@@ -54,6 +54,7 @@
 #define PCADDR *r4300_pc(r4300)
 #define ADD_TO_PC(x) (*r4300_pc_struct(r4300)) += x;
 #define DECLARE_INSTRUCTION(name) void cached_interp_##name(void)
+void cdl_log_jump(int take_jump, uint32_t jump_target);
 
 #define DECLARE_JUMP(name, destination, condition, link, likely, cop1) \
 void cached_interp_##name(void) \
@@ -61,6 +62,91 @@ void cached_interp_##name(void) \
     DECLARE_R4300 \
     const int take_jump = (condition); \
     const uint32_t jump_target = (destination); \
+    cdl_log_jump(take_jump, jump_target); \
+    int64_t *link_register = (link); \
+    if (cop1 && check_cop1_unusable(r4300)) return; \
+    if (link_register != &r4300_regs(r4300)[0]) \
+    { \
+        *link_register = SE32(*r4300_pc(r4300) + 8); \
+    } \
+    if (!likely || take_jump) \
+    { \
+        (*r4300_pc_struct(r4300))++; \
+        r4300->delay_slot=1; \
+        UPDATE_DEBUGGER(); \
+        (*r4300_pc_struct(r4300))->ops(); \
+        cp0_update_count(r4300); \
+        r4300->delay_slot=0; \
+        if (take_jump && !r4300->skip_jump) \
+        { \
+            (*r4300_pc_struct(r4300))=r4300->cached_interp.actual->block+((jump_target-r4300->cached_interp.actual->start)>>2); \
+        } \
+    } \
+    else \
+    { \
+        (*r4300_pc_struct(r4300)) += 2; \
+        cp0_update_count(r4300); \
+    } \
+    r4300->cp0.last_addr = *r4300_pc(r4300); \
+    if (*r4300_cp0_next_interrupt(&r4300->cp0) <= r4300_cp0_regs(&r4300->cp0)[CP0_COUNT_REG]) gen_interrupt(r4300); \
+} \
+ \
+void cached_interp_##name##_OUT(void) \
+{ \
+    DECLARE_R4300 \
+    const int take_jump = (condition); \
+    const uint32_t jump_target = (destination); \
+    int64_t *link_register = (link); \
+    if (cop1 && check_cop1_unusable(r4300)) return; \
+    if (link_register != &r4300_regs(r4300)[0]) \
+    { \
+        *link_register = SE32(*r4300_pc(r4300) + 8); \
+    } \
+    if (!likely || take_jump) \
+    { \
+        (*r4300_pc_struct(r4300))++; \
+        r4300->delay_slot=1; \
+        UPDATE_DEBUGGER(); \
+        (*r4300_pc_struct(r4300))->ops(); \
+        cp0_update_count(r4300); \
+        r4300->delay_slot=0; \
+        if (take_jump && !r4300->skip_jump) \
+        { \
+            generic_jump_to(r4300, jump_target); \
+        } \
+    } \
+    else \
+    { \
+        (*r4300_pc_struct(r4300)) += 2; \
+        cp0_update_count(r4300); \
+    } \
+    r4300->cp0.last_addr = *r4300_pc(r4300); \
+    if (*r4300_cp0_next_interrupt(&r4300->cp0) <= r4300_cp0_regs(&r4300->cp0)[CP0_COUNT_REG]) gen_interrupt(r4300); \
+} \
+  \
+void cached_interp_##name##_IDLE(void) \
+{ \
+    DECLARE_R4300 \
+    uint32_t* cp0_regs = r4300_cp0_regs(&r4300->cp0); \
+    const int take_jump = (condition); \
+    int skip; \
+    if (cop1 && check_cop1_unusable(r4300)) return; \
+    if (take_jump) \
+    { \
+        cp0_update_count(r4300); \
+        skip = *r4300_cp0_next_interrupt(&r4300->cp0) - cp0_regs[CP0_COUNT_REG]; \
+        if (skip > 3) cp0_regs[CP0_COUNT_REG] += (skip & UINT32_C(0xFFFFFFFC)); \
+        else cached_interp_##name(); \
+    } \
+    else cached_interp_##name(); \
+}
+#define DECLARE_JUMP_ALWAYS(name, destination, condition, link, likely, cop1) \
+void cached_interp_##name(void) \
+{ \
+    DECLARE_R4300 \
+    const int take_jump = (condition); \
+    const uint32_t jump_target = (destination); \
+    cdl_log_jump(take_jump, jump_target); \
     int64_t *link_register = (link); \
     if (cop1 && check_cop1_unusable(r4300)) return; \
     if (link_register != &r4300_regs(r4300)[0]) \

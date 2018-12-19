@@ -97,6 +97,9 @@ static void do_dma(struct ai_controller* ai, struct ai_dma* dma)
     else
         ai->delayed_carry = 0;
 
+    // printf("do_dma address:%#08x length:%#08x duration:%#08x \n", dma->address, dma->length, dma->duration);
+
+
     /* schedule end of dma event */
     cp0_update_count(ai->mi->r4300);
     add_interrupt_event(&ai->mi->r4300->cp0, AI_INT, dma->duration);
@@ -124,8 +127,11 @@ static void fifo_push(struct ai_controller* ai)
     }
 }
 
+// first in first out (queue)
 static void fifo_pop(struct ai_controller* ai)
 {
+    // printf("fifo_pop address:%#08x length:%#08x duration:%#08x \n", ai->fifo[0].address, ai->fifo[0].length, ai->fifo[0].duration);
+
     if (ai->regs[AI_STATUS_REG] & AI_STATUS_FULL)
     {
         ai->fifo[0].address = ai->fifo[1].address;
@@ -159,6 +165,8 @@ void init_ai(struct ai_controller* ai,
 
 void poweron_ai(struct ai_controller* ai)
 {
+    printf("poweron_ai AI_REGS_COUNT:%#08x AI_DMA_FIFO_SIZE:%#08x \n", AI_REGS_COUNT, AI_DMA_FIFO_SIZE);
+
     memset(ai->regs, 0, AI_REGS_COUNT*sizeof(uint32_t));
     memset(ai->fifo, 0, AI_DMA_FIFO_SIZE*sizeof(struct ai_dma));
     ai->samples_format_changed = 0;
@@ -196,6 +204,8 @@ void write_ai_regs(void* opaque, uint32_t address, uint32_t value, uint32_t mask
     switch (reg)
     {
     case AI_LEN_REG:
+        // printf("witre AI_LEN_REG before:%#08x after:%#08x \n", ai->regs[AI_LEN_REG], value);
+
         masked_write(&ai->regs[AI_LEN_REG], value, mask);
         if (ai->regs[AI_LEN_REG] != 0) {
             fifo_push(ai);
@@ -225,6 +235,7 @@ void write_ai_regs(void* opaque, uint32_t address, uint32_t value, uint32_t mask
 void ai_end_of_dma_event(void* opaque)
 {
     struct ai_controller* ai = (struct ai_controller*)opaque;
+    // printf("ai_end_of_dma_event %#08x \n", ai->last_read);
 
     if (ai->last_read != 0)
     {

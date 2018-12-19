@@ -47,6 +47,7 @@ static unsigned int get_tv_type(void)
 
 void pif_bootrom_hle_execute(struct r4300_core* r4300)
 {
+    printf("Start pif_bootrom_hle_execute\n");
     uint32_t pif24;
     unsigned int seed;       /* seed (depends on CIC version) */
     unsigned int rom_type;   /* 0:Cart, 1:DD */
@@ -114,11 +115,13 @@ void pif_bootrom_hle_execute(struct r4300_core* r4300)
     r4300_write_aligned_word(r4300, R4300_KSEG1 + MM_PI_REGS + 4*PI_BSD_DOM1_RLS_REG, (bsd_dom1_config >> 20) & 0x03, ~UINT32_C(0));
 
     /* XXX: if XBus is used, wait until DPC_pipe_busy is cleared */
-
+    printf("COPY IPL3 to DMEM dest:%#008x \n",MM_RSP_MEM + 0x40);
     /* copy IPL3 to dmem */
-    memcpy((unsigned char*)mem_base_u32(r4300->mem->base, MM_RSP_MEM + 0x40),
-           (unsigned char*)mem_base_u32(r4300->mem->base, rom_base + 0x40),
+    memcpy((unsigned char*)mem_base_u32(r4300->mem->base, MM_RSP_MEM + 0x40, 1),
+           (unsigned char*)mem_base_u32(r4300->mem->base, rom_base + 0x40, 1),
            0xfc0);
+    printf("END COPY IPL3 to DMEM src:%#008x length:%#008x \n",rom_base + 0x40, 0xfc0);
+     // What is IPL3, it seems to be the first 4KB of ROM?
 
     /* XXX: compute IPL3 checksum */
     /* XXX: wait for SI_RD_BUSY to be cleared, set PIF_30 */
@@ -128,7 +131,7 @@ void pif_bootrom_hle_execute(struct r4300_core* r4300)
     /* XXX: wait for SI_RD_BUSY to be cleared, set PIF_3c[6] */
 
     /* required by CIC x105 */
-    uint32_t* imem = mem_base_u32(r4300->mem->base, MM_RSP_MEM + 0x1000);
+    uint32_t* imem = mem_base_u32(r4300->mem->base, MM_RSP_MEM + 0x1000, 1);
     imem[0x0000/4] = 0x3c0dbfc0;
     imem[0x0004/4] = 0x8da807fc;
     imem[0x0008/4] = 0x25ad07c0;
@@ -146,4 +149,5 @@ void pif_bootrom_hle_execute(struct r4300_core* r4300)
     /* XXX: should prepare execution of IPL3 in DMEM here :
      * e.g. jump to 0xa4000040 */
     *r4300_cp0_last_addr(&r4300->cp0) = 0xa4000040;
+    printf("Finished Bootrom HLE\n");
 }
