@@ -146,7 +146,6 @@ void cached_interp_##name(void) \
     DECLARE_R4300 \
     const int take_jump = (condition); \
     const uint32_t jump_target = (destination); \
-    cdl_log_jump_always(take_jump, jump_target); \
     int64_t *link_register = (link); \
     if (cop1 && check_cop1_unusable(r4300)) return; \
     if (link_register != &r4300_regs(r4300)[0]) \
@@ -164,6 +163,8 @@ void cached_interp_##name(void) \
         if (take_jump && !r4300->skip_jump) \
         { \
             (*r4300_pc_struct(r4300))=r4300->cached_interp.actual->block+((jump_target-r4300->cached_interp.actual->start)>>2); \
+            uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300));\
+			cdl_log_jump_always(take_jump, jump_target, op_address); \
         } \
     } \
     else \
@@ -180,7 +181,6 @@ void cached_interp_##name##_OUT(void) \
     DECLARE_R4300 \
     const int take_jump = (condition); \
     const uint32_t jump_target = (destination); \
-    cdl_log_jump_always(take_jump, jump_target); \
     int64_t *link_register = (link); \
     if (cop1 && check_cop1_unusable(r4300)) return; \
     if (link_register != &r4300_regs(r4300)[0]) \
@@ -198,6 +198,8 @@ void cached_interp_##name##_OUT(void) \
         if (take_jump && !r4300->skip_jump) \
         { \
             generic_jump_to(r4300, jump_target); \
+            uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300));\
+			cdl_log_jump_always(take_jump, jump_target, op_address); \
         } \
     } \
     else \
@@ -355,6 +357,7 @@ void cached_interp_FIN_BLOCK(void)
     DECLARE_R4300
     if (!r4300->delay_slot)
     {
+        printf("generic_jump_to?\n");
         generic_jump_to(r4300, ((*r4300_pc_struct(r4300))-1)->addr+4);
 /*
 #ifdef DBG
@@ -391,9 +394,9 @@ void cached_interp_NOTCOMPILED(void)
 {
     DECLARE_R4300
     uint32_t *mem = fast_mem_access(r4300, r4300->cached_interp.blocks[*r4300_pc(r4300)>>12]->start);
-#ifdef DBG
-    DebugMessage(M64MSG_INFO, "NOTCOMPILED: addr = %x ops = %lx", *r4300_pc(r4300), (long) (*r4300_pc_struct(r4300))->ops);
-#endif
+// #ifdef DBG
+//     DebugMessage(M64MSG_INFO, "NOTCOMPILED: addr = %x ops = %lx", *r4300_pc(r4300), (long) (*r4300_pc_struct(r4300))->ops);
+// #endif
 
     if (mem == NULL) {
         DebugMessage(M64MSG_ERROR, "not compiled exception");
@@ -937,9 +940,9 @@ void cached_interp_init_block(struct r4300_core* r4300, uint32_t address)
 
     length = get_block_length(b);
 
-#ifdef DBG
-    DebugMessage(M64MSG_INFO, "init block %" PRIX32 " - %" PRIX32, b->start, b->end);
-#endif
+// #ifdef DBG
+//     DebugMessage(M64MSG_INFO, "init block %" PRIX32 " - %" PRIX32, b->start, b->end);
+// #endif
 
     /* allocate block instructions */
     if (!b->block)
@@ -1063,9 +1066,9 @@ void cached_interp_recompile_block(struct r4300_core* r4300, const uint32_t* iw,
         }
     }
 
-#ifdef DBG
-    DebugMessage(M64MSG_INFO, "block recompiled (%" PRIX32 "-%" PRIX32 ")", func, block->start+i*4);
-#endif
+// #ifdef DBG
+//     DebugMessage(M64MSG_INFO, "block recompiled (%" PRIX32 "-%" PRIX32 ")", func, block->start+i*4);
+// #endif
 }
 
 void cached_interpreter_jump_to(struct r4300_core* r4300, uint32_t address)

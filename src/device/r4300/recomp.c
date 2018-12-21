@@ -472,9 +472,9 @@ void dynarec_init_block(struct r4300_core* r4300, uint32_t address)
 
     length = get_block_length(b);
 
-#ifdef DBG
-    DebugMessage(M64MSG_INFO, "init block %" PRIX32 " - %" PRIX32, b->start, b->end);
-#endif
+// #ifdef DBG
+//     DebugMessage(M64MSG_INFO, "init block %" PRIX32 " - %" PRIX32, b->start, b->end);
+// #endif
 
     /* allocate block instructions */
     if (!b->block)
@@ -745,9 +745,9 @@ void dynarec_recompile_block(struct r4300_core* r4300, const uint32_t* iw, struc
     block->max_code_length = r4300->recomp.max_code_length;
     free_assembler(r4300, &block->jumps_table, &block->jumps_number, &block->riprel_table, &block->riprel_number);
 
-#ifdef DBG
-    DebugMessage(M64MSG_INFO, "block recompiled (%" PRIX32 "-%" PRIX32 ")", func, block->start+i*4);
-#endif
+// #ifdef DBG
+//     DebugMessage(M64MSG_INFO, "block recompiled (%" PRIX32 "-%" PRIX32 ")", func, block->start+i*4);
+// #endif
 #if defined(PROFILE_R4300)
     fclose(r4300->recomp.pfProfile);
     r4300->recomp.pfProfile = NULL;

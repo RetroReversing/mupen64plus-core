@@ -89,9 +89,10 @@ unsigned int cart_rom_dma_read(void* opaque, const uint8_t* dram, uint32_t dram_
     return /* length / 8 */0x1000;
 }
 
+void cdl_log_cart_rom_dma_write(uint32_t dram_addr, uint32_t cart_addr, uint32_t length);
+
 unsigned int cart_rom_dma_write(void* opaque, uint8_t* dram, uint32_t dram_addr, uint32_t cart_addr, uint32_t length)
 {
-    // printf("cart_rom_dma_write: dram_addr: %#008x length:%#008x\n", dram_addr, length);
     size_t i;
     struct cart_rom* cart_rom = (struct cart_rom*)opaque;
     const uint8_t* mem = cart_rom->rom;
@@ -100,12 +101,15 @@ unsigned int cart_rom_dma_write(void* opaque, uint8_t* dram, uint32_t dram_addr,
 
     if (cart_addr + length < cart_rom->rom_size)
     {
+        // Already covered by other DMA logger
+        // cdl_log_cart_rom_dma_write(dram_addr, cart_addr, length);
         for(i = 0; i < length; ++i) {
             dram[(dram_addr+i)^S8] = mem[(cart_addr+i)^S8];
         }
     }
     else
     {
+        printf("cart_addr + length > cart_rom->rom_size\n");
         unsigned int diff = (cart_rom->rom_size <= cart_addr)
             ? 0
             : cart_rom->rom_size - cart_addr;

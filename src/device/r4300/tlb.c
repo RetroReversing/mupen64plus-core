@@ -86,7 +86,7 @@ void tlb_map(struct tlb* tlb, size_t entry)
         {
             for (i=e->start_even;i<e->end_even;i+=0x1000) {
                 tlb->LUT_r[i>>12] = UINT32_C(0x80000000) | (e->phys_even + (i - e->start_even) + 0xFFF);
-                printf("Even phys_even:%#08x start_even:%#08x (i - e->start_even):%#08x (e->phys_even + (i - e->start_even) + 0xFFF):%#08x tlb->LUT_r[i>>12]:%#08x \n",e->phys_even, e->start_even, (i - e->start_even), (e->phys_even + (i - e->start_even) + 0xFFF), tlb->LUT_r[i>>12]);
+                // printf("Even phys_even:%#08x start_even:%#08x (i - e->start_even):%#08x (e->phys_even + (i - e->start_even) + 0xFFF):%#08x tlb->LUT_r[i>>12]:%#08x \n",e->phys_even, e->start_even, (i - e->start_even), (e->phys_even + (i - e->start_even) + 0xFFF), tlb->LUT_r[i>>12]);
             }
             // does d_even mean you can write to it?
             if (e->d_even)
@@ -142,7 +142,7 @@ uint32_t virtual_to_physical_address(struct r4300_core* r4300, uint32_t address,
     // w changes whether to do LUT_w and LUT_r
     if (w == 1)
     {
-        printf("Write to physical address? address:%#08x addr:%#08x \n", address, addr);
+        // printf("Write to physical address? address:%#08x addr:%#08x \n", address, addr); mario golf
         //  Write
         if (tlb->LUT_w[addr])
             return (tlb->LUT_w[addr] & UINT32_C(0xFFFFF000)) | (address & UINT32_C(0xFFF));

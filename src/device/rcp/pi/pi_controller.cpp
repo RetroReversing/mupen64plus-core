@@ -129,8 +129,10 @@ static void dma_pi_write(struct pi_controller* pi)
     uint32_t proper_cart_address = cart_addr-0x10000000;
     struct cart_rom* cart_rom = (struct cart_rom*)opaque;
     const uint8_t* mem = cart_rom->rom;
-    log_dma_write(cart_rom->rom, proper_cart_address, cart_addr, length, pi->regs[PI_DRAM_ADDR_REG]);
-    corrupt_if_in_range(cart_rom->rom, proper_cart_address);
+    if (cart_rom->rom_size > 0) {
+        log_dma_write(cart_rom->rom, proper_cart_address, cart_addr, length, pi->regs[PI_DRAM_ADDR_REG]);
+        corrupt_if_in_range(cart_rom->rom, proper_cart_address);
+    }
 // End CDL
         
     if (handler == NULL) {

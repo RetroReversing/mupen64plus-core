@@ -122,6 +122,7 @@ static void fifo_push(struct ai_controller* ai)
         ai->fifo[0].length = ai->regs[AI_LEN_REG];
         ai->fifo[0].duration = duration;
         ai->regs[AI_STATUS_REG] |= AI_STATUS_BUSY;
+        printf("fifo_push address:%#08x length:%#08x duration:%#08x \n", ai->fifo[0].address, ai->fifo[0].length, ai->fifo[0].duration);
 
         do_dma(ai, &ai->fifo[0]);
     }

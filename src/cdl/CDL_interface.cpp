@@ -16,6 +16,7 @@ using namespace std;
 
 json fileConfig;
 json libultra_signatures;
+#define USE_CDL 1;
 
 extern "C" {
 #include "../main/rom.h"
@@ -60,9 +61,12 @@ std::map<uint32_t, cdl_dram_cart_map> dma_sp_writes;
 std::map<uint32_t, cdl_labels> labels;
 std::map<uint32_t, cdl_jump_return> jump_returns;
 std::map<uint32_t,cdl_tlb> tlbs;
-std::map<uint32_t,cdl_dma> dmas;
+std::map<uint32_t,cdl_dma> dmas = std::map<uint32_t,cdl_dma>();
 
 void cdl_keyevents(int keysym, int keymod) {
+    #ifndef USE_CDL
+        return;
+    #endif
     printf("event_sdl_keydown frame:%d key:%d modifier:%d \n", l_CurrentFrame, keysym, keymod);
     should_reverse_jumps = false;
     // S key
@@ -175,6 +179,9 @@ void corrupt_if_in_range(uint8_t* mem, uint32_t proper_cart_address) {
 }
 
 void corruptBytes(uint8_t* mem, uint32_t cartAddr, int times) {
+    #ifndef USE_CDL
+        return;
+    #endif
     if (times>difference) {
         times=difference/4;
     }
@@ -190,7 +197,7 @@ void corruptBytes(uint8_t* mem, uint32_t cartAddr, int times) {
 }
 
 void cdl_log_opcode(uint32_t program_counter, uint8_t* op_address) {
-        jump_data[program_counter] = op_address;
+        // jump_data[program_counter] = op_address;
 }
 
 uint32_t map_assembly_offset_to_rom_offset(uint32_t assembly_offset, uint32_t tlb_mapped_addr) {
@@ -252,9 +259,13 @@ void log_dma_write(uint8_t* mem, uint32_t proper_cart_address, uint32_t cart_add
     if (dmas.find(proper_cart_address) != dmas.end() ) 
         return;
 
+    uint32_t current_function = 0;
      // we know this function name: osPiRawStartDma
      if (function_stack.size() > 0) {
-        labels[function_stack.back()].func_name = "osPiRawStartDma";
+         current_function = function_stack.back();
+         if (labels.find(current_function) != labels.end()) {
+            labels[current_function].func_name = "osPiRawStartDma";
+        }
      }
 
     auto t = cdl_dma();
@@ -266,12 +277,14 @@ void log_dma_write(uint8_t* mem, uint32_t proper_cart_address, uint32_t cart_add
     t.ascii_header = get_header_ascii(mem, proper_cart_address);
     t.header = mem[proper_cart_address+3];
     t.frame = l_CurrentFrame;
-    t.func_addr = labels[function_stack.back()].func_name;
+
+    if (function_stack.size() > 0 && labels.find(current_function) != labels.end()) {
+        t.func_addr = labels[current_function].func_name;
+    }
+
     dmas[proper_cart_address] = t;
 
     std::cout << "DMA: Dram:0x" << std::hex << t.dram_start << "->0x" << t.dram_end << " Length:0x" << t.length << " " << t.ascii_header << " Stack:" << function_stack.size() << "\n";
-    
-
     
 }
 
@@ -367,7 +380,7 @@ int reverse_jump(int take_jump, uint32_t jump_target) {
     return take_jump;
 }
 
-void cdl_log_jump_always(int take_jump, uint32_t jump_target) {
+void cdl_log_jump_always(int take_jump, uint32_t jump_target, uint8_t* jump_target_memory) {
     uint32_t previous_function_backup = function_stack.back();
     function_stack.push_back(jump_target);
 
@@ -383,20 +396,23 @@ void cdl_log_jump_always(int take_jump, uint32_t jump_target) {
     t.func_name = "func_"+jump_target_str;
     t.func_stack = function_stack.size();
     labels[jump_target] = t;
+    jump_data[jump_target] = jump_target_memory;
 }
 void cdl_log_jump_return(int take_jump, uint32_t jump_target, uint32_t pc) {
     uint32_t previous_function_backup = function_stack.back();
     if (function_stack.size()>0) {
+        previous_function_backup = function_stack.back();
         function_stack.pop_back();
     }
-    // TODO: could save a known return point here..
 
 
     if (jumps[jump_target] >3) return;
     jumps[jump_target] = 0x04;
 
-    if (jump_returns.find(previous_function_backup) != jump_returns.end() ) 
-        return;
+    if (jump_returns.find(previous_function_backup) != jump_returns.end()) 
+        {
+            return;
+        }
     auto t = cdl_jump_return();
     string jump_target_str = n2hexstr(jump_target);
     t.return_offset = pc;
@@ -416,7 +432,11 @@ void cdl_log_jump_return(int take_jump, uint32_t jump_target, uint32_t pc) {
 
         // if it is a libultra function then lets name it
         if (libultra_signatures["function_signatures"].find(bytes) != libultra_signatures["function_signatures"].end()) {
+            std::cout << "In libultra:" <<  bytes << "\n";
             labels[previous_function_backup].func_name = libultra_signatures["function_signatures"][bytes];
+        }
+        else {
+            std::cout << "Not in lib_ultra " << bytes << "\n";
         }
 
         if (function_signatures.find(bytes) == function_signatures.end()) {
@@ -443,9 +463,6 @@ bool is_physical_data_mapped_using_tlb() {
 }
 
 int cdl_log_jump(int take_jump, uint32_t jump_target) {
-    // if (jumps[jump_target] < 3 && take_jump) {
-    //     cdl_log_assembly_location(jump_target);
-    // }
 
     if (should_reverse_jumps)
     {
@@ -551,6 +568,9 @@ void cdl_log_mm_cart_rom_pif(uint32_t address,int isBootRom) {
 }
 
 void cdl_log_pif_ram(uint32_t address, uint32_t* value) {
+    #ifndef USE_CDL
+        return;
+    #endif
     printf("Game was reset? \n");
     if (!createdCartBackup) {
         backupCart();
@@ -601,6 +621,9 @@ void cdl_log_cart_rom_dma_write(uint32_t dram_addr, uint32_t cart_addr, uint32_t
 }
 
 void cdl_log_dma_sp_write(uint32_t spmemaddr, uint32_t dramaddr, uint32_t length, unsigned char *dram) {
+    #ifndef USE_CDL
+        return;
+    #endif
     if (dma_sp_writes.find(dramaddr) != dma_sp_writes.end() ) 
         return;
     auto t = cdl_dram_cart_map();
