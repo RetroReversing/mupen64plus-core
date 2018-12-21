@@ -13,6 +13,10 @@ using json = nlohmann::json;
 using namespace std;
 
 #include "CDL.hpp"
+
+json fileConfig;
+json libultra_signatures;
+
 extern "C" {
 #include "../main/rom.h"
 #include "../device/r4300/tlb.h"
@@ -22,10 +26,11 @@ void main_state_save(int format, const char *filename);
 void main_state_load(const char *filename);
 void show_interface();
 void corruptBytes(uint8_t* mem, uint32_t cartAddr, int times);
-void load_jumps_from_json() ;
 void saveJsonToFile();
 void write_rom_mapping();
 void cdl_log_pif_ram(uint32_t address, uint32_t* value);
+void find_asm_sections();
+uint32_t map_assembly_offset_to_rom_offset(uint32_t assembly_offset, uint32_t tlb_mapped_addr);
 
 extern int   l_CurrentFrame;
 
@@ -35,19 +40,27 @@ extern int   l_CurrentFrame;
 int corrupt_start =  0xb2b77c;
 int corrupt_end = 0xb2b77c;
 int difference = corrupt_end-corrupt_start;
-std::map<uint, string> registerChanges;
-json fileConfig;
-std::map<unsigned int,char> jumps;
-std::map<unsigned int, uint32_t> jump_data;
-std::map<int,int> dram_reads;
-std::map<int,int> dram_writes;
-std::map<int,int> rsp_reads;
-std::map<int,int> rdram_reads;
-std::map<int,bool> offsetHasAssembly;
+std::map<uint32_t,char> jumps;
+std::map<uint32_t, uint8_t*> jump_data;
+std::map<uint32_t,uint32_t> rsp_reads;
+std::map<uint32_t,uint32_t> rdram_reads;
+std::map<uint32_t,bool> offsetHasAssembly;
 string last_reversed_address = "";
 bool should_reverse_jumps = false;
 int frame_last_reversed = 0;
 int time_last_reversed = 0;
+// uint32_t previous_function = 0;
+ std::vector<uint32_t> function_stack;
+
+std::map<string, string> function_signatures;
+
+std::map<uint32_t, cdl_dram_cart_map> audio_samples;
+std::map<uint32_t, cdl_dram_cart_map> cart_rom_dma_writes;
+std::map<uint32_t, cdl_dram_cart_map> dma_sp_writes;
+std::map<uint32_t, cdl_labels> labels;
+std::map<uint32_t, cdl_jump_return> jump_returns;
+std::map<uint32_t,cdl_tlb> tlbs;
+std::map<uint32_t,cdl_dma> dmas;
 
 void cdl_keyevents(int keysym, int keymod) {
     printf("event_sdl_keydown frame:%d key:%d modifier:%d \n", l_CurrentFrame, keysym, keymod);
@@ -80,7 +93,18 @@ void resetCart() {
     std::cout << "TODO: reset";
 }
 
+void readLibUltraSignatures() {
+    std::ifstream i("libultra.json");
+    if (i.good()) {
+        i >> libultra_signatures;
+    } 
+    if (libultra_signatures.find("function_signatures") == libultra_signatures.end()) {
+            libultra_signatures["function_signatures"] = R"([])"_json;
+    }
+}
+
 void readJsonFromFile() {
+    readLibUltraSignatures();
     string filename = ROM_PARAMS.headername;
     filename += ".json";
     // read a JSON file
@@ -88,34 +112,39 @@ void readJsonFromFile() {
     if (i.good()) {
         i >> fileConfig;
     }
-    
-    if (fileConfig.find("mappings") == fileConfig.end()) {
-                fileConfig["mappings"] = R"(
-                {                }
-                )"_json;
-    }
     if (fileConfig.find("jumps") == fileConfig.end()) {
-                fileConfig["jumps"] = R"(
-                {
-                }
-                )"_json;
+                fileConfig["jumps"] = R"([])"_json;
     }
-    if (fileConfig.find("tlb") == fileConfig.end()) {
-                fileConfig["tlb"] = R"({})"_json;
+    if (fileConfig.find("tlbs") == fileConfig.end()) {
+                fileConfig["tlbs"] = R"([])"_json;
+    }
+    if (fileConfig.find("dmas") == fileConfig.end()) {
+                fileConfig["dmas"] = R"([])"_json;
     }
     if (fileConfig.find("rsp_reads") == fileConfig.end()) {
-                fileConfig["rsp_reads"] = R"({})"_json;
+                fileConfig["rsp_reads"] = R"([])"_json;
     }
     if (fileConfig.find("rdram_reads") == fileConfig.end())
-                fileConfig["rdram_reads"] = R"({})"_json;
+                fileConfig["rdram_reads"] = R"([])"_json;
     if (fileConfig.find("reversed_jumps") == fileConfig.end())
                 fileConfig["reversed_jumps"] = R"({})"_json;
+    if (fileConfig.find("labels") == fileConfig.end())
+                fileConfig["labels"] = R"([])"_json;
+    if (fileConfig.find("jump_returns") == fileConfig.end())
+                fileConfig["jump_returns"] = R"([])"_json;
 
+    jumps = fileConfig["jumps"].get< std::map<uint32_t,char> >();
+    tlbs = fileConfig["tlbs"].get< std::map<uint32_t,cdl_tlb> >();
+    dmas = fileConfig["dmas"].get< std::map<uint32_t,cdl_dma> >();
+    rsp_reads = fileConfig["rsp_reads"].get< std::map<uint32_t,uint32_t> >();
+    rdram_reads = fileConfig["rdram_reads"].get< std::map<uint32_t,uint32_t> >();
+    labels = fileConfig["labels"].get< std::map<uint32_t,cdl_labels> >();
+    jump_returns = fileConfig["jump_returns"].get< std::map<uint32_t,cdl_jump_return> >();
 }
+
 void saveJsonToFile() {
     string filename = ROM_PARAMS.headername;
     filename += ".json";
-    // write prettified JSON to another file
     std::ofstream o(filename);
     o << fileConfig.dump(4) << std::endl;
 }
@@ -160,160 +189,106 @@ void corruptBytes(uint8_t* mem, uint32_t cartAddr, int times) {
     }
 }
 
-void cdl_log_opcode(uint32_t program_counter, uint32_t* op_address) {
-    // if (jumps[program_counter]>0) {
-        jump_data[program_counter] = *op_address;
-        // fileConfig["jumps_data"][program_counter] =  n2hexstr(*op_address);
-        // std::cout << "Jump instr: " << std::hex << *op_address << " PC:" << program_counter << " :" << jump_data[program_counter] << "\n";
-    // }
+void cdl_log_opcode(uint32_t program_counter, uint8_t* op_address) {
+        jump_data[program_counter] = op_address;
 }
 
-string get_header_ascii(uint8_t* mem, uint32_t proper_cart_address) {
-    std::stringstream sstream;
-    for (int i=3; i>=0; i--) {
-        char c = mem[proper_cart_address+i];
-        if (!isalpha(c)) { break; }
-        if (c == '!' || c == '^' || c == '+' || c == '/' || c == ':' || c == '%'|| c == '"' || c == '#') { break; }
-        sstream << c;
-    }
-    return sstream.str();
-}
-
-
-
-string to_hex(int my_integer) {
-    std::stringstream sstream;
-    sstream << std::hex << my_integer;
-    return sstream.str();
-}
-
-struct cdl_tlb {
-  unsigned int start;
-  unsigned int end;
-  unsigned int rom_offset;
-};
-vector<cdl_tlb> tlbs;
-
-uint32_t map_assembly_offset_to_rom_offset(uint32_t assembly_offset) {
+uint32_t map_assembly_offset_to_rom_offset(uint32_t assembly_offset, uint32_t tlb_mapped_addr) {
     // or if its in KSEG0/1
+    if (assembly_offset >= 0x80000000) {
+        uint32_t mapped_offset = assembly_offset & UINT32_C(0x1ffffffc);
+        // std::cout << "todo:" << std::hex << assembly_offset << "\n";
+        return map_assembly_offset_to_rom_offset(mapped_offset, assembly_offset);
+    }
 
-    for (auto& t: tlbs) {
+    for(auto it = tlbs.begin(); it != tlbs.end(); ++it) {
+        auto t = it->second;
         if (assembly_offset>=t.start && assembly_offset <=t.end) {
-            // std::cout<< "T:" << t.start << " " << t.end << " " << t.rom_offset << "\n";
-            return t.rom_offset + (assembly_offset-t.start);
+            uint32_t mapped_offset = t.rom_offset + (assembly_offset-t.start);
+            return map_assembly_offset_to_rom_offset(mapped_offset, assembly_offset);
         }
     }
+    for(auto it = dmas.begin(); it != dmas.end(); ++it) {
+        auto& t = it->second;
+        if (assembly_offset>=t.dram_start && assembly_offset <=t.dram_end) {
+            uint32_t mapped_offset = t.rom_start + (assembly_offset-t.dram_start);
+            t.is_assembly = true;
+            t.tbl_mapped_addr = tlb_mapped_addr;
+            // DMA is likely the actual value in rom
+            return mapped_offset;
+        }
+    }
+    // std::cout << "Not in dmas:" << std::hex << assembly_offset << "\n";
     // std::cout << "Unmapped: " << std::hex << assembly_offset << "\n";
     return assembly_offset;
 }
 
 // these are all the data regions
 // for assembly regions check out the tlb
-void create_n64_split_regions(uint8_t* mem, uint32_t proper_cart_address, uint32_t length, uint32_t dram_addr) {
+string create_n64_split_regions(cdl_dma d) { //uint8_t* header_bytes, uint32_t proper_cart_address, uint32_t length, uint32_t dram_addr, uint32_t frame,  bool is_assembly, uint32_t tbl_mapped_addr) {
+    uint8_t* header_bytes = (uint8_t*)&d.header;
     std::stringstream sstream, header;
-    string proper_cart_address_str = n2hexstr(proper_cart_address);
-    string ascii_header = get_header_ascii(mem, proper_cart_address);
-    // printf("WTF: %#08x \n",mem[proper_cart_address]);
-    header << " header: " <<  ascii_header << " 0x" << std::hex << (mem[proper_cart_address+3]+0) << (mem[proper_cart_address+2]+0) << (mem[proper_cart_address+1]+0) << (mem[proper_cart_address]+0);
-    // header << " ascii: " << mem[proper_cart_address+3] << mem[proper_cart_address+2] << mem[proper_cart_address+1] << mem[proper_cart_address];
-    sstream << "  - [0x" << std::hex << proper_cart_address << ", 0x"<< (proper_cart_address+length) << ", \"bin\",    \"_" << ascii_header << "_" << proper_cart_address << "_len_"<< length << "\"] # , 0x" << (dram_addr) << "] frame:0x" << n2hexstr(l_CurrentFrame) << header.str();
-    std::string mapping = sstream.str();
-    registerChanges[proper_cart_address] = ""+mapping;
-    fileConfig["mappings"][proper_cart_address_str] = mapping;
-    // fileConfig["mappings"][proper_cart_address_str] = R"({})"_json;
-    // fileConfig["mappings"][proper_cart_address_str]["start"] = proper_cart_address;
-    // fileConfig["mappings"][proper_cart_address_str]["end"] = proper_cart_address+length;
+    string region_type = "bin";
+    if (d.is_assembly) {
+        region_type="asm";
+    }
+    string proper_cart_address_str = n2hexstr(d.rom_start);
+    string ascii_header = d.ascii_header;
+    header << " header: " <<  ascii_header << " 0x" << std::hex << (header_bytes[3]+0) << (header_bytes[2]+0) << (header_bytes[1]+0) << (header_bytes[0]+0);
+    sstream << "  - [0x" << std::hex << d.rom_start << ", 0x"<< (d.rom_start+d.length);
+    sstream << ", \"" << region_type << "\",    \"_" << ascii_header << "_" << d.rom_start << "_len_"<< d.length;
+    sstream << "\"] # , 0x" << n2hexstr(d.dram_start) << "] frame:0x" << n2hexstr(d.frame) << header.str();
+    //sstream << " Func:" << d.func_addr;
+    
+    if (d.tbl_mapped_addr>0) {
+        sstream << "Tbl mapped:"<<d.tbl_mapped_addr;
+    }
 
-    printf("dma_pi_write frame:%d %s\n", l_CurrentFrame, mapping.c_str());
+    std::string mapping = sstream.str();
+    return mapping;
 }
 
 void log_dma_write(uint8_t* mem, uint32_t proper_cart_address, uint32_t cart_addr, uint32_t length, uint32_t dram_addr) {
-    if (registerChanges.find(proper_cart_address) != registerChanges.end() ) 
+    if (dmas.find(proper_cart_address) != dmas.end() ) 
         return;
-    string proper_cart_address_str = n2hexstr(proper_cart_address);
-    bool isInJson = fileConfig["mappings"].find(proper_cart_address_str) != fileConfig["mappings"].end();
-    if (isInJson) return;
+
+     // we know this function name: osPiRawStartDma
+     if (function_stack.size() > 0) {
+        labels[function_stack.back()].func_name = "osPiRawStartDma";
+     }
+
+    auto t = cdl_dma();
+    t.dram_start=dram_addr;
+    t.dram_end = dram_addr+length;
+    t.rom_start = proper_cart_address;
+    t.rom_end = proper_cart_address+length;
+    t.length = length;
+    t.ascii_header = get_header_ascii(mem, proper_cart_address);
+    t.header = mem[proper_cart_address+3];
+    t.frame = l_CurrentFrame;
+    t.func_addr = labels[function_stack.back()].func_name;
+    dmas[proper_cart_address] = t;
+
+    std::cout << "DMA: Dram:0x" << std::hex << t.dram_start << "->0x" << t.dram_end << " Length:0x" << t.length << " " << t.ascii_header << " Stack:" << function_stack.size() << "\n";
     
 
-    if (!createdCartBackup) {
-        backupCart();
-        readJsonFromFile();
-        load_jumps_from_json();
-    }
-    create_n64_split_regions(mem, proper_cart_address, length, dram_addr);
-}
-
-void save_jumps_to_json() {
-    printf("save_jumps_from_json \n");
-    for(map<unsigned int, char>::iterator it = jumps.begin(); it != jumps.end(); ++it) {
-        unsigned int addr = it->first;//  >> 12;
-        offsetHasAssembly[addr] = true;
-        string jump_target_str = n2hexstr(it->first);
-        // std::cout << addr  << " : " << (0+jumps[addr]) << "\n";
-        fileConfig["jumps"][jump_target_str] = (it->second+0);
-        fileConfig["jumps_rom"][jump_target_str] =  n2hexstr(map_assembly_offset_to_rom_offset(it->first));
-        fileConfig["jumps_data"][jump_target_str] =  n2hexstr(jump_data[it->first]);
-        // std::cout << "Instruction data:" << std::hex << jump_data[addr] << "offset:" << map_assembly_offset_to_rom_offset(it->first) << "\n";
-    }
-}
-
-void load_jumps_from_json() {
-    printf("load_jumps_from_json \n");
-
-    for (json::iterator it = fileConfig["jumps"].begin(); it != fileConfig["jumps"].end(); ++it) {
-        unsigned int address = hex_to_int(it.key());
-        int value = it.value();
-        jumps[address] = value; //stoi(value);
-        // std::cout << address  << " : " << (0+jumps[address]) << "\n";
-    }
-}
-
-void load_tbls_from_json() {
-    printf("load_tbls_from_json \n");
-// todo
-    for (json::iterator it = fileConfig["tlb"].begin(); it != fileConfig["tlb"].end(); ++it) {
-        unsigned int address = hex_to_int(it.key());
-        int value = it.value();
-
-        auto t = cdl_tlb();
-        // t.start=start;
-        // t.end = end;
-        // t.rom_offset = phys;
-
-        tlbs.push_back(t);
-        // jumps[address] = value; //stoi(value);
-        std::cout << address  << " : " << (0+jumps[address]) << "\n";
-    }
-}
-
-void save_it_to_json(map<int, int>::iterator it, map<int, int>::iterator end, string keyName) {
-    for(; it != end; ++it) {
-        string jump_target_str = n2hexstr(it->first);
-        string value_at_address = n2hexstr(it->second);
-        if (fileConfig[keyName].find(jump_target_str) != fileConfig[keyName].end() ) {
-            string old_value = fileConfig[keyName][jump_target_str];
-            if (old_value!=value_at_address) {
-                printf("%s: old:%s new:%s \n", keyName.c_str(), old_value.c_str(), value_at_address.c_str());
-            }
-        }
-        fileConfig[keyName][jump_target_str] = value_at_address;
-    }
     
 }
+
 
 void save_dram_rw_to_json() {
-    for(map<int, int>::iterator it = rdram_reads.begin(); it != rdram_reads.end(); ++it) {
-        string jump_target_str = n2hexstr(it->first);
-        string value_at_address = n2hexstr(it->second);
-        if (fileConfig["rdram_reads"].find(jump_target_str) != fileConfig["rdram_reads"].end() ) {
-            string old_value = fileConfig["rdram_reads"][jump_target_str];
-            if (old_value!=value_at_address) {
-                printf("rdram_reads: old:%s new:%s \n", old_value.c_str(), value_at_address.c_str());
-            }
-        }
-        fileConfig["rdram_reads"][jump_target_str] = value_at_address;
-    }
-    save_it_to_json(rsp_reads.begin(), rsp_reads.end(), "rsp_reads");
+    // Note if you save it here you might want to also update readJsonFromFile()
+    fileConfig["rsp_reads"] = rsp_reads;
+    fileConfig["rdram_reads"] = rdram_reads;
+    fileConfig["tlbs"] = tlbs;
+    fileConfig["dmas"] = dmas;
+    fileConfig["jumps"] = jumps;
+    //fileConfig["jump_data"] = jump_data;
+    fileConfig["audio_samples"] = audio_samples;
+    fileConfig["cart_rom_dma_writes"] = cart_rom_dma_writes;
+    fileConfig["dma_sp_writes"] = dma_sp_writes;
+    fileConfig["labels"] = labels;
+    fileConfig["function_signatures"] = function_signatures;
 }
 
 void resetReversing() {
@@ -321,13 +296,16 @@ void resetReversing() {
     last_reversed_address="";
 }
 
-
-void write_rom_mapping() {
+void save_cdl_files() {
     resetReversing();
-
-    save_jumps_to_json();
+    find_asm_sections();
     save_dram_rw_to_json();
     saveJsonToFile();
+}
+
+
+void write_rom_mapping() {
+    save_cdl_files();
     printf("ROM_PARAMS.headername: %s \n", ROM_PARAMS.headername);
     string filename = ROM_PARAMS.headername;
     filename += ".config.yaml";
@@ -351,18 +329,28 @@ void write_rom_mapping() {
     file <<"  - [0x000000, 0x000040, \"header\", \"header\"]\n";
     file <<"  - [0x000040, 0x000B70, \"asm\",    \"boot\"]\n";
     file <<"  - [0x000B70, 0x001000, \"bin\",    \"bootbin\"]\n";
+    
+
     //
     // Write out 
     //
     //for(map<int, char*>::iterator it = mapOfInstructions.begin(); it != mapOfInstructions.end(); ++it) {
     // for (json::iterator it = fileConfig["mappings"].begin(); it != fileConfig["mappings"].end(); ++it) {
-    for (auto& it : fileConfig["mappings"]) {
-        string myStr = it;
-        file << myStr << "\n";
+    for (auto& it : dmas) {
+        auto t = it.second;
+        file << create_n64_split_regions(t) << "\n";
     }
 
-    
-
+    file <<"# Labels for functions or data memory addresses\n";
+    file <<"# All label addresses are RAM addresses\n";
+    file <<"# Order does not matter\n";
+    file <<"labels:\n";
+    int8_t* entryPoint = (int8_t*)(void*)&ROM_HEADER.PC;
+    file << "   - [0x" << (entryPoint[0]+0) << (entryPoint[1]+0) << (entryPoint[2] +0)<< (entryPoint[3]+0) <<", \"EntryPoint\"]\n";
+    for (auto& it : labels) {
+        auto t = it.second;
+        file << "   - [0x" << t.func_offset <<", \"" <<  t.func_name << "\"]\n";
+    }
 
 }
 
@@ -380,8 +368,64 @@ int reverse_jump(int take_jump, uint32_t jump_target) {
 }
 
 void cdl_log_jump_always(int take_jump, uint32_t jump_target) {
-    // if (jumps[jump_target] >3) return;
+    uint32_t previous_function_backup = function_stack.back();
+    function_stack.push_back(jump_target);
+
+    if (jumps[jump_target] >3) return;
     jumps[jump_target] = 0x04;
+
+    if (labels.find(jump_target) != labels.end() ) 
+        return;
+    auto t = cdl_labels();
+    string jump_target_str = n2hexstr(jump_target);
+    t.func_offset = jump_target_str;
+    t.caller_offset = n2hexstr(previous_function_backup);
+    t.func_name = "func_"+jump_target_str;
+    t.func_stack = function_stack.size();
+    labels[jump_target] = t;
+}
+void cdl_log_jump_return(int take_jump, uint32_t jump_target, uint32_t pc) {
+    uint32_t previous_function_backup = function_stack.back();
+    if (function_stack.size()>0) {
+        function_stack.pop_back();
+    }
+    // TODO: could save a known return point here..
+
+
+    if (jumps[jump_target] >3) return;
+    jumps[jump_target] = 0x04;
+
+    if (jump_returns.find(previous_function_backup) != jump_returns.end() ) 
+        return;
+    auto t = cdl_jump_return();
+    string jump_target_str = n2hexstr(jump_target);
+    t.return_offset = pc;
+    t.func_offset = previous_function_backup;
+    t.caller_offset = jump_target;
+    jump_returns[previous_function_backup] = t;
+
+    uint64_t length = pc-previous_function_backup;
+    labels[previous_function_backup].return_offset_from_start = length;
+    if (jump_data.find(previous_function_backup) != jump_data.end()) {
+        uint64_t byte_len = length;
+        if (byte_len > 0xFF) {
+            byte_len = 0xFF;
+        }
+        string bytes = printBytesToStr(jump_data[previous_function_backup], byte_len)+"_"+n2hexstr(length);
+        labels[previous_function_backup].function_bytes = bytes;
+
+        // if it is a libultra function then lets name it
+        if (libultra_signatures["function_signatures"].find(bytes) != libultra_signatures["function_signatures"].end()) {
+            labels[previous_function_backup].func_name = libultra_signatures["function_signatures"][bytes];
+        }
+
+        if (function_signatures.find(bytes) == function_signatures.end()) {
+            function_signatures[bytes] = labels[previous_function_backup].func_name;
+        } else {
+            function_signatures[bytes] = "Multiple functions";
+            std::cout << "WHY:" << *jump_data[previous_function_backup] << " len:" << length << " pc:0x"<< pc << " - 0x" << previous_function_backup << "\n";
+        }
+    }
 }
 
 unsigned int find_first_non_executed_jump() {
@@ -397,25 +441,6 @@ bool is_physical_data_mapped_using_tlb() {
     // todo
     return false;
 }
-
-bool does_section_contain_assembly() {
-    // todo: use offsetHasAssembly[addr] = true;
-    // fileConfig["mappings"] contains start and end
-    for (json::iterator it = fileConfig["mappings"].begin(); it != fileConfig["mappings"].end(); ++it) {
-        unsigned int address = hex_to_int(it.key());
-        int value = it.value();
-        std::cout << address  << " : " << value << "\n";
-    }
-    return false;
-}
-
-// void cdl_log_assembly_location(uint32_t address_of_known_assembly) {
-//     printf("cdl_log_assembly_location %#08x \n", address_of_known_assembly);
-//     // now need to get tlb information
-//     // lets loop through all the tlb's
-//     // todo
-    
-// }
 
 int cdl_log_jump(int take_jump, uint32_t jump_target) {
     // if (jumps[jump_target] < 3 && take_jump) {
@@ -446,17 +471,16 @@ int cdl_log_jump(int take_jump, uint32_t jump_target) {
     return take_jump;
 }
 
-void save_table_mapping(int entry, unsigned int phys, unsigned int start, unsigned int end, bool isOdd) {
+void save_table_mapping(int entry, uint32_t phys, uint32_t start,uint32_t end, bool isOdd) {
     
     //printf("tlb_map:%d ODD Start:%#08x End:%#08x Phys:%#08x \n",entry, e->start_odd, e->end_odd, e->phys_odd);
-        unsigned int length = end-start;
+        uint32_t length = end-start;
 
         auto t = cdl_tlb();
         t.start=start;
         t.end = end;
         t.rom_offset = phys;
-
-        tlbs.push_back(t);
+        tlbs[phys]=t;
 
         string key = "";
         key+="[0x";
@@ -528,6 +552,11 @@ void cdl_log_mm_cart_rom_pif(uint32_t address,int isBootRom) {
 
 void cdl_log_pif_ram(uint32_t address, uint32_t* value) {
     printf("Game was reset? \n");
+    if (!createdCartBackup) {
+        backupCart();
+        readJsonFromFile();
+        function_stack.push_back(0);
+    }
     if (should_reverse_jumps) {
         // should_reverse_jumps = false;
         fileConfig["bad_jumps"][last_reversed_address] = "reset";
@@ -540,6 +569,47 @@ void cdl_log_opcode_error() {
     printf("Very bad opcode, caused crash! \n");
     fileConfig["bad_jumps"][last_reversed_address] = "crash";
     main_state_load(NULL);
+}
+
+void find_asm_sections() {
+    printf("finding asm in sections \n");
+    for(map<unsigned int, char>::iterator it = jumps.begin(); it != jumps.end(); ++it) {
+        string jump_target_str = n2hexstr(it->first);
+        fileConfig["jumps_rom"][jump_target_str] =  n2hexstr(map_assembly_offset_to_rom_offset(it->first,0));
+    }
+}
+
+void cdl_log_audio_sample(uint32_t saved_ai_dram, uint32_t saved_ai_length) {
+    if (audio_samples.find(saved_ai_dram) != audio_samples.end() ) 
+        return;
+    auto t = cdl_dram_cart_map();
+    t.dram_offset = n2hexstr(saved_ai_dram);
+    t.rom_offset = n2hexstr(saved_ai_length);
+    audio_samples[saved_ai_dram] = t;
+    printf("audio_plugin_push_samples AI_DRAM_ADDR_REG:%#08x length:%#08x\n", saved_ai_dram, saved_ai_length);
+}
+
+void cdl_log_cart_rom_dma_write(uint32_t dram_addr, uint32_t cart_addr, uint32_t length) {
+    //cart_addr-=0x10000000;
+    if (cart_rom_dma_writes.find(cart_addr) != cart_rom_dma_writes.end() ) 
+        return;
+    auto t = cdl_dram_cart_map();
+    t.dram_offset = n2hexstr(dram_addr);
+    t.rom_offset = n2hexstr(cart_addr);
+    cart_rom_dma_writes[cart_addr] = t;
+    printf("cart_rom_dma_write: dram_addr:%#008x cart_addr:%#008x length:%#008x\n", dram_addr, cart_addr, length);
+}
+
+void cdl_log_dma_sp_write(uint32_t spmemaddr, uint32_t dramaddr, uint32_t length, unsigned char *dram) {
+    if (dma_sp_writes.find(dramaddr) != dma_sp_writes.end() ) 
+        return;
+    auto t = cdl_dram_cart_map();
+    t.dram_offset = n2hexstr(dramaddr);
+    t.rom_offset = n2hexstr(spmemaddr);
+    dma_sp_writes[dramaddr] = t;
+    // FrameBuffer RSP info
+    printWords(dram, dramaddr, length);
+    printf("FB: dma_sp_write SPMemAddr:%#08x Dramaddr:%#08x length:%#08x  \n", spmemaddr, dramaddr, length);
 }
 
 } // end extern C

@@ -891,10 +891,10 @@ DECLARE_INSTRUCTION(MTLO)
 
 /* Jump & Branch instructions */
 
-DECLARE_JUMP_ALWAYS(J,   (jinst_index<<2) | ((PCADDR+4) & UINT32_C(0xF0000000)), 1, &r4300_regs(r4300)[0],  0, 0)
+DECLARE_JUMP(J,   (jinst_index<<2) | ((PCADDR+4) & UINT32_C(0xF0000000)), 1, &r4300_regs(r4300)[0],  0, 0)
 DECLARE_JUMP_ALWAYS(JAL, (jinst_index<<2) | ((PCADDR+4) & UINT32_C(0xF0000000)), 1, &r4300_regs(r4300)[31], 0, 0)
 
-DECLARE_JUMP_ALWAYS(JR,   irs32, 1, &r4300_regs(r4300)[0], 0, 0)
+DECLARE_JUMP_RETURN(JR,   irs32, 1, &r4300_regs(r4300)[0], 0, 0)
 DECLARE_JUMP_ALWAYS(JALR, irs32, 1, &rrd,    0, 0)
 
 DECLARE_JUMP(BEQ,     PCADDR + (iimmediate+1)*4, irs == irt, &r4300_regs(r4300)[0], 0, 0)
