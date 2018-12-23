@@ -145,7 +145,7 @@ void cached_interp_##name(void) \
 { \
     DECLARE_R4300 \
     const int take_jump = (condition); \
-    const uint32_t jump_target = (destination); \
+    uint32_t jump_target = (destination); \
     int64_t *link_register = (link); \
     if (cop1 && check_cop1_unusable(r4300)) return; \
     if (link_register != &r4300_regs(r4300)[0]) \
@@ -162,6 +162,7 @@ void cached_interp_##name(void) \
         r4300->delay_slot=0; \
         if (take_jump && !r4300->skip_jump) \
         { \
+            jump_target = cdl_get_alternative_jump(jump_target); \
             (*r4300_pc_struct(r4300))=r4300->cached_interp.actual->block+((jump_target-r4300->cached_interp.actual->start)>>2); \
             uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300));\
 			cdl_log_jump_always(take_jump, jump_target, op_address); \
@@ -180,7 +181,7 @@ void cached_interp_##name##_OUT(void) \
 { \
     DECLARE_R4300 \
     const int take_jump = (condition); \
-    const uint32_t jump_target = (destination); \
+    uint32_t jump_target = (destination); \
     int64_t *link_register = (link); \
     if (cop1 && check_cop1_unusable(r4300)) return; \
     if (link_register != &r4300_regs(r4300)[0]) \
@@ -197,6 +198,7 @@ void cached_interp_##name##_OUT(void) \
         r4300->delay_slot=0; \
         if (take_jump && !r4300->skip_jump) \
         { \
+            jump_target = cdl_get_alternative_jump(jump_target); \
             generic_jump_to(r4300, jump_target); \
             uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300));\
 			cdl_log_jump_always(take_jump, jump_target, op_address); \
@@ -357,7 +359,7 @@ void cached_interp_FIN_BLOCK(void)
     DECLARE_R4300
     if (!r4300->delay_slot)
     {
-        printf("generic_jump_to?\n");
+        // printf("generic_jump_to? %#08x\n", ((*r4300_pc_struct(r4300))-1)->addr+4);
         generic_jump_to(r4300, ((*r4300_pc_struct(r4300))-1)->addr+4);
 /*
 #ifdef DBG
@@ -384,6 +386,8 @@ Used by dynarec only, check should be unnecessary
             (*r4300_pc_struct(r4300))->ops();
             r4300->cached_interp.actual = blk;
             (*r4300_pc_struct(r4300)) = inst+1;
+            uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300));
+			cdl_log_jump_cached(1, ((*r4300_pc_struct(r4300))-1)->addr+4, op_address);
         }
         else
             (*r4300_pc_struct(r4300))->ops();

@@ -19,6 +19,7 @@ void to_json(json& j, const cdl_labels& p) {
         {"func_stack", p.func_stack},
         {"return_offset_from_start", p.return_offset_from_start},
         {"function_bytes", p.function_bytes},
+        {"function_bytes_endian", p.function_bytes_endian},
     };
 }
 void from_json(const json& j, cdl_labels& p) {
@@ -28,6 +29,7 @@ void from_json(const json& j, cdl_labels& p) {
     j.at("func_stack").get_to(p.func_stack);
     j.at("return_offset_from_start").get_to(p.return_offset_from_start);
     j.at("function_bytes").get_to(p.function_bytes);
+    j.at("function_bytes_endian").get_to(p.function_bytes_endian);
 }
 
 void to_json(json& j, const cdl_dram_cart_map& p) {
@@ -48,8 +50,8 @@ void from_json(const json& j, cdl_tlb& p) {
     j.at("rom_offset").get_to(p.rom_offset);
 }
 
-unsigned int hex_to_int(string str) {
-    unsigned int x;   
+uint32_t hex_to_int(string str) {
+    uint32_t x;   
     std::stringstream ss;
     ss << std::hex << str;
     ss >> x;
@@ -87,9 +89,9 @@ void from_json(const json& j, cdl_dma& p) {
 
 string printBytesToStr(uint8_t* mem, uint32_t length=0x18) {
     std::stringstream sstream;
-    sstream << std::hex;
+    //sstream << std::hex << std::setfill ('0') << std::setw(sizeof(T)*2);
     for (int i=0; i<=length; i++) {
-        sstream << (mem[i]+0);
+        sstream << n2hexstr((uint8_t)mem[i], 2);
     }
     return sstream.str();
 }

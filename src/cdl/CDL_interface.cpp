@@ -16,6 +16,7 @@ using namespace std;
 
 json fileConfig;
 json libultra_signatures;
+json linker_map_file;
 #define USE_CDL 1;
 
 extern "C" {
@@ -48,8 +49,10 @@ std::map<uint32_t,uint32_t> rdram_reads;
 std::map<uint32_t,bool> offsetHasAssembly;
 string last_reversed_address = "";
 bool should_reverse_jumps = false;
+bool should_change_jumps = false;
 int frame_last_reversed = 0;
 int time_last_reversed = 0;
+string game_name = "";
 // uint32_t previous_function = 0;
  std::vector<uint32_t> function_stack;
 
@@ -82,14 +85,16 @@ void cdl_keyevents(int keysym, int keymod) {
     // Z Key
     if (keysym == 122) {
         write_rom_mapping();
-        should_reverse_jumps = true;
-        time_last_reversed = time(0);
+        // should_change_jumps = true;
+        //should_reverse_jumps = true;
+        //time_last_reversed = time(0);
         // show_interface();
     }
 }
 
 bool createdCartBackup = false;
 void backupCart() {
+    game_name = alphabetic_only_name(ROM_PARAMS.headername, 21);
     std::cout << "TODO: backup";
     createdCartBackup = true;
 }
@@ -106,10 +111,26 @@ void readLibUltraSignatures() {
             libultra_signatures["function_signatures"] = R"([])"_json;
     }
 }
+void saveLibUltraSignatures() {
+    std::ofstream o("libultra.mod.json");
+    o << libultra_signatures.dump(4) << std::endl;
+}
+
+
+void readLinkerMapFile() {
+    std::ifstream i("autofill.csv"); //"mario.json"
+    if (i.good()) {
+        i >> linker_map_file;
+    } else {
+        cout << "Unable to read Linker map file\n";
+    }
+}
 
 void readJsonFromFile() {
     readLibUltraSignatures();
-    string filename = ROM_PARAMS.headername;
+    readLinkerMapFile();
+    string filename = "./configs/";
+    filename+=ROM_PARAMS.headername;
     filename += ".json";
     // read a JSON file
     std::ifstream i(filename);
@@ -147,7 +168,8 @@ void readJsonFromFile() {
 }
 
 void saveJsonToFile() {
-    string filename = ROM_PARAMS.headername;
+    string filename = "./configs/";
+    filename += ROM_PARAMS.headername;
     filename += ".json";
     std::ofstream o(filename);
     o << fileConfig.dump(4) << std::endl;
@@ -248,7 +270,7 @@ string create_n64_split_regions(cdl_dma d) { //uint8_t* header_bytes, uint32_t p
     //sstream << " Func:" << d.func_addr;
     
     if (d.tbl_mapped_addr>0) {
-        sstream << "Tbl mapped:"<<d.tbl_mapped_addr;
+        sstream << " Tbl mapped:"<<d.tbl_mapped_addr;
     }
 
     std::string mapping = sstream.str();
@@ -314,13 +336,31 @@ void save_cdl_files() {
     find_asm_sections();
     save_dram_rw_to_json();
     saveJsonToFile();
+    saveLibUltraSignatures();
+}
+
+uint32_t cdl_get_alternative_jump(uint32_t current_jump) {
+    if (!should_change_jumps) {
+        return current_jump;
+    }
+
+    for (auto& it : linker_map_file.items()) {
+        uint32_t new_jump = hex_to_int(it.key());
+        cout << "it:" << it.value() << " = " << it.key() << " old:" << current_jump << " new:"<< new_jump << "\n";
+        linker_map_file.erase(it.key());
+        should_change_jumps = false;
+        return new_jump;
+    }
+
+    return current_jump;
 }
 
 
 void write_rom_mapping() {
     save_cdl_files();
     printf("ROM_PARAMS.headername: %s \n", ROM_PARAMS.headername);
-    string filename = ROM_PARAMS.headername;
+    string filename = "./configs/";
+    filename+=ROM_PARAMS.headername;
     filename += ".config.yaml";
     ofstream file(filename, std::ios_base::binary);
     file << "# ROM splitter configuration file\n";
@@ -380,6 +420,9 @@ int reverse_jump(int take_jump, uint32_t jump_target) {
     return take_jump;
 }
 
+void cdl_log_jump_cached(int take_jump, uint32_t jump_target, uint8_t* jump_target_memory) {
+    cout << "Cached:" << std::hex << jump_target << "\n";
+}
 void cdl_log_jump_always(int take_jump, uint32_t jump_target, uint8_t* jump_target_memory) {
     uint32_t previous_function_backup = function_stack.back();
     function_stack.push_back(jump_target);
@@ -392,17 +435,21 @@ void cdl_log_jump_always(int take_jump, uint32_t jump_target, uint8_t* jump_targ
     auto t = cdl_labels();
     string jump_target_str = n2hexstr(jump_target);
     t.func_offset = jump_target_str;
-    t.caller_offset = n2hexstr(previous_function_backup);
-    t.func_name = "func_"+jump_target_str;
+    t.caller_offset = labels[previous_function_backup].func_name;
+    t.func_name = game_name+"_func_"+jump_target_str;
     t.func_stack = function_stack.size();
     labels[jump_target] = t;
     jump_data[jump_target] = jump_target_memory;
 }
 void cdl_log_jump_return(int take_jump, uint32_t jump_target, uint32_t pc) {
-    uint32_t previous_function_backup = function_stack.back();
+    uint32_t previous_function_backup = -1;
     if (function_stack.size()>0) {
         previous_function_backup = function_stack.back();
         function_stack.pop_back();
+    }
+    else {
+        // cout << "Missed push back?";
+        return;
     }
 
 
@@ -422,30 +469,66 @@ void cdl_log_jump_return(int take_jump, uint32_t jump_target, uint32_t pc) {
 
     uint64_t length = pc-previous_function_backup;
     labels[previous_function_backup].return_offset_from_start = length;
+    if (length<2) {
+        return;
+    }
+
     if (jump_data.find(previous_function_backup) != jump_data.end()) {
         uint64_t byte_len = length;
         if (byte_len > 0xFF) {
             byte_len = 0xFF;
         }
         string bytes = printBytesToStr(jump_data[previous_function_backup], byte_len)+"_"+n2hexstr(length);
-        labels[previous_function_backup].function_bytes = bytes;
+        string bytes_with_branch_delay = printBytesToStr(jump_data[previous_function_backup], byte_len+4)+"_"+n2hexstr(length+4);
+        labels[previous_function_backup].function_bytes = bytes_with_branch_delay;
+        // labels[previous_function_backup].function_bytes_endian = Swap4Bytes(bytes);
+        
+
+        
 
         // if it is a libultra function then lets name it
-        if (libultra_signatures["function_signatures"].find(bytes) != libultra_signatures["function_signatures"].end()) {
-            std::cout << "In libultra:" <<  bytes << "\n";
-            labels[previous_function_backup].func_name = libultra_signatures["function_signatures"][bytes];
-        }
-        else {
-            std::cout << "Not in lib_ultra " << bytes << "\n";
+        if (libultra_signatures["function_signatures"].find(bytes_with_branch_delay) != libultra_signatures["function_signatures"].end()) {
+            std::cout << "In new libultra:" <<  bytes_with_branch_delay << " name:"<< libultra_signatures["function_signatures"][bytes_with_branch_delay] << "\n";
+            labels[previous_function_backup].func_name = libultra_signatures["function_signatures"][bytes_with_branch_delay];
+            // return since we have already named this functions, don't need its signature to be saved
+            return;
         }
 
-        if (function_signatures.find(bytes) == function_signatures.end()) {
-            function_signatures[bytes] = labels[previous_function_backup].func_name;
+        // if it is an OLD libultra function then lets name it (without branch delay)
+        if (libultra_signatures["function_signatures"].find(bytes) != libultra_signatures["function_signatures"].end()) {
+            std::cout << "In libultra:" <<  bytes << " name:"<< libultra_signatures["function_signatures"][bytes] << "\n";
+            labels[previous_function_backup].func_name = libultra_signatures["function_signatures"][bytes];
+            libultra_signatures["function_signatures"][bytes_with_branch_delay] = labels[previous_function_backup].func_name;
+            // delete the old non-branch delay version
+            libultra_signatures["function_signatures"].erase(bytes);
+            // return since we have already named this functions, don't need its signature to be saved
+            return;
+        }
+
+        // now check to see if its in the mario map
+        // if (/*strcmp(game_name.c_str(),"SUPERMARIO") == 0 &&*/ linker_map_file.find( n2hexstr(previous_function_backup) ) != linker_map_file.end()) {
+        //     cout << game_name << "It is in the map file!" << n2hexstr(previous_function_backup) << " as:" << linker_map_file[n2hexstr(previous_function_backup)] << "\n";
+        //     function_signatures[bytes] = linker_map_file[n2hexstr(previous_function_backup)];
+        //     return;
+        // }
+        // linker_map_file
+        // std::cout << "Not in lib_ultra " << bytes << "\n";
+
+        if (function_signatures.find(bytes_with_branch_delay) == function_signatures.end()) {
+            function_signatures[bytes_with_branch_delay] = labels[previous_function_backup].func_name;
+            libultra_signatures["function_signatures"][bytes_with_branch_delay] = labels[previous_function_backup].func_name;
         } else {
-            function_signatures[bytes] = "Multiple functions";
-            std::cout << "WHY:" << *jump_data[previous_function_backup] << " len:" << length << " pc:0x"<< pc << " - 0x" << previous_function_backup << "\n";
+            //function_signatures.erase(bytes);
+            function_signatures[bytes_with_branch_delay] = "Multiple functions";
+            std::cout << "Multiple Functions for :" << *jump_data[previous_function_backup] << " len:" << length << " pc:0x"<< pc << " - 0x" << previous_function_backup << "\n";
         }
     }
+}
+
+// loop through and erse multiple functions
+void erase_multiple_func_signatures() {
+    // function_signatures
+    // Multiple functions
 }
 
 unsigned int find_first_non_executed_jump() {

@@ -97,7 +97,7 @@ int cdl_log_jump(int take_jump, uint32_t jump_target);
    static void name(struct r4300_core* r4300, uint32_t op) \
    { \
       int take_jump = (condition); \
-      const uint32_t jump_target = (destination); \
+      uint32_t jump_target = (destination); \
       int64_t *link_register = (link); \
       if (cop1 && check_cop1_unusable(r4300)) return; \
       if (link_register != &r4300_regs(r4300)[0]) \
@@ -113,7 +113,8 @@ int cdl_log_jump(int take_jump, uint32_t jump_target);
         r4300->delay_slot=0; \
         if (take_jump && !r4300->skip_jump) \
         { \
-          r4300->interp_PC.addr = jump_target; \
+			jump_target = cdl_get_alternative_jump(jump_target); \
+			r4300->interp_PC.addr = jump_target; \
 			uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300));\
 			cdl_log_jump_always(take_jump, jump_target, op_address); \
         } \

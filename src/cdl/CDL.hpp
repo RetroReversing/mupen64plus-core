@@ -18,6 +18,11 @@ string alphabetic_only_name(char* mem, int length);
 string get_header_ascii(uint8_t* mem, uint32_t proper_cart_address);
 string printBytesToStr(uint8_t* mem, uint32_t length) ;
 
+#define Swap4Bytes(val) \
+ ( (((val) >> 24) & 0x000000FF) | (((val) >>  8) & 0x0000FF00) | \
+(((val) <<  8) & 0x00FF0000) | (((val) << 24) & 0xFF000000) )
+
+
 struct cdl_tlb {
     uint32_t start;
     uint32_t end;
@@ -47,6 +52,7 @@ struct cdl_labels {
     uint32_t func_stack;
     uint32_t return_offset_from_start;
     string function_bytes;
+    string function_bytes_endian;
 };
 struct cdl_jump_return {
     string func_offset;

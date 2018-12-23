@@ -35,6 +35,8 @@
 #endif
 #include "plugin/plugin.h"
 
+void cdl_log_dma_sp_write(uint32_t spmemaddr, uint32_t dramaddr, uint32_t length, unsigned char *dram );
+
 static void dma_sp_write(struct rsp_core* sp)
 {
     unsigned int i,j;
@@ -48,10 +50,9 @@ static void dma_sp_write(struct rsp_core* sp)
     unsigned int memaddr = sp->regs[SP_MEM_ADDR_REG] & 0xfff;
     unsigned int dramaddr = sp->regs[SP_DRAM_ADDR_REG] & 0xffffff;
 
-    // printf("dma_sp_write memaddr:%#08x dramaddr:%#08x \n", sp->regs[SP_MEM_ADDR_REG], sp->regs[SP_DRAM_ADDR_REG]);
-
     unsigned char *spmem = (unsigned char*)sp->mem + (sp->regs[SP_MEM_ADDR_REG] & 0x1000);
     unsigned char *dram = (unsigned char*)sp->ri->rdram->dram;
+    cdl_log_dma_sp_write(sp->regs[SP_MEM_ADDR_REG] , sp->regs[SP_DRAM_ADDR_REG], length, dram);
 
     for(j=0; j<count; j++) {
         pre_framebuffer_read(&sp->dp->fb, dramaddr);
