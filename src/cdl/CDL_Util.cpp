@@ -1,5 +1,17 @@
 #include "CDL.hpp"
 
+void to_json(json& j, const cdl_memory_map& p) {
+        j = json{{"start", p.start}, 
+        {"end", p.end},
+        {"type", p.type}
+        };
+    }
+void from_json(const json& j, cdl_memory_map& p) {
+    j.at("start").get_to(p.start);
+    j.at("end").get_to(p.end);
+    j.at("type").get_to(p.type);
+}
+
 void to_json(json& j, const cdl_jump_return& p) {
         j = json{{"return_offset", p.return_offset}, 
         {"func_offset", p.func_offset},
@@ -19,7 +31,10 @@ void to_json(json& j, const cdl_labels& p) {
         {"func_stack", p.func_stack},
         {"return_offset_from_start", p.return_offset_from_start},
         {"function_bytes", p.function_bytes},
+        {"stack_trace", p.stack_trace},
         {"function_bytes_endian", p.function_bytes_endian},
+        {"addresses", p.addresses},
+        {"isRenamed", p.isRenamed},
     };
 }
 void from_json(const json& j, cdl_labels& p) {
@@ -29,7 +44,10 @@ void from_json(const json& j, cdl_labels& p) {
     j.at("func_stack").get_to(p.func_stack);
     j.at("return_offset_from_start").get_to(p.return_offset_from_start);
     j.at("function_bytes").get_to(p.function_bytes);
+    j.at("stack_trace").get_to(p.stack_trace);
     j.at("function_bytes_endian").get_to(p.function_bytes_endian);
+    j.at("addresses").get_to(p.addresses);
+    j.at("isRenamed").get_to(p.isRenamed);
 }
 
 void to_json(json& j, const cdl_dram_cart_map& p) {
@@ -70,6 +88,7 @@ void to_json(json& j, const cdl_dma& p) {
         {"is_assembly", p.is_assembly},
         {"ascii_header", p.ascii_header},
         {"func_addr", p.func_addr},
+        {"guess_type", p.guess_type},
         };
     }
 
@@ -85,6 +104,7 @@ void from_json(const json& j, cdl_dma& p) {
     j.at("is_assembly").get_to(p.is_assembly);
     j.at("ascii_header").get_to(p.ascii_header);
     j.at("func_addr").get_to(p.func_addr);
+    j.at("guess_type").get_to(p.guess_type);
 }
 
 string printBytesToStr(uint8_t* mem, uint32_t length=0x18) {
@@ -96,6 +116,7 @@ string printBytesToStr(uint8_t* mem, uint32_t length=0x18) {
     return sstream.str();
 }
 
+extern "C" {
 void printBytes(uint8_t* mem, uint32_t cartAddr, uint32_t length=0x18) {
     for (int i=0; i<=length; i++) {
         printf(" %d:%#02x ", i, mem[cartAddr+i]);
@@ -105,7 +126,6 @@ void printBytes(uint8_t* mem, uint32_t cartAddr, uint32_t length=0x18) {
     }
     printf("\n");
 }
-
 void printWords(uint8_t* mem, uint32_t cartAddr, uint32_t length=0x18) {
     for (int i=0; i<=length; i+=1) {
         printf("%s", n2hexstr(mem[cartAddr+i]).c_str());
@@ -115,7 +135,7 @@ void printWords(uint8_t* mem, uint32_t cartAddr, uint32_t length=0x18) {
     }
     printf("\n");
 }
-
+}
 string alphabetic_only_name(char* mem, int length) {
     std::stringstream sstream;
     for (int i=0; i<=length; i++) {

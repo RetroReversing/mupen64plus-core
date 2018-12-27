@@ -14,7 +14,7 @@ using namespace std;
 
 #include "CDL.hpp"
 
-json fileConfig;
+extern json fileConfig;
 json libultra_signatures;
 json linker_map_file;
 #define USE_CDL 1;
@@ -22,6 +22,7 @@ json linker_map_file;
 extern "C" {
 #include "../main/rom.h"
 #include "../device/r4300/tlb.h"
+#include "../device/memory/memory.h"
 // TODO: need to log input and then call input.keyDown(keymod, keysym);
 
 void main_state_save(int format, const char *filename);
@@ -32,7 +33,10 @@ void saveJsonToFile();
 void write_rom_mapping();
 void cdl_log_pif_ram(uint32_t address, uint32_t* value);
 void find_asm_sections();
+void find_audio_sections();
+void find_audio_functions();
 uint32_t map_assembly_offset_to_rom_offset(uint32_t assembly_offset, uint32_t tlb_mapped_addr);
+string print_function_stack_trace();
 
 extern int   l_CurrentFrame;
 
@@ -41,30 +45,43 @@ extern int   l_CurrentFrame;
 // 
 int corrupt_start =  0xb2b77c;
 int corrupt_end = 0xb2b77c;
+bool cdl_log_memory = true;
 int difference = corrupt_end-corrupt_start;
-std::map<uint32_t,char> jumps;
+extern std::map<uint32_t,string> memory_to_log;
+extern std::map<uint32_t,char> jumps;
+extern std::map<uint32_t,string> audio_address;
+extern std::map<uint32_t,uint8_t> cached_jumps;
 std::map<uint32_t, uint8_t*> jump_data;
-std::map<uint32_t,uint32_t> rsp_reads;
-std::map<uint32_t,uint32_t> rdram_reads;
+extern std::map<uint32_t,uint32_t> rsp_reads;
+extern std::map<uint32_t,uint32_t> rdram_reads;
 std::map<uint32_t,bool> offsetHasAssembly;
+
 string last_reversed_address = "";
 bool should_reverse_jumps = false;
 bool should_change_jumps = false;
 int frame_last_reversed = 0;
 int time_last_reversed = 0;
 string game_name = "";
+// string next_dma_type = "";
 // uint32_t previous_function = 0;
- std::vector<uint32_t> function_stack;
+ std::vector<uint32_t> function_stack = std::vector<uint32_t>();
+ std::vector<uint32_t> previous_ra;
 
-std::map<string, string> function_signatures;
+extern std::map<string, string> function_signatures;
 
-std::map<uint32_t, cdl_dram_cart_map> audio_samples;
-std::map<uint32_t, cdl_dram_cart_map> cart_rom_dma_writes;
-std::map<uint32_t, cdl_dram_cart_map> dma_sp_writes;
-std::map<uint32_t, cdl_labels> labels;
-std::map<uint32_t, cdl_jump_return> jump_returns;
-std::map<uint32_t,cdl_tlb> tlbs;
-std::map<uint32_t,cdl_dma> dmas = std::map<uint32_t,cdl_dma>();
+extern std::map<uint32_t, cdl_dram_cart_map> audio_samples;
+extern std::map<uint32_t, cdl_dram_cart_map> cart_rom_dma_writes;
+extern std::map<uint32_t, cdl_dram_cart_map> dma_sp_writes;
+extern std::map<uint32_t, cdl_labels> labels;
+extern std::map<uint32_t, cdl_jump_return> jump_returns;
+extern std::map<uint32_t,cdl_tlb> tlbs;
+extern std::map<uint32_t,cdl_dma> dmas;
+std::map<uint32_t, std::map<string, string> > addresses;
+
+// 
+// # Toggles
+// 
+// #define support_n64_prints 1
 
 void cdl_keyevents(int keysym, int keymod) {
     #ifndef USE_CDL
@@ -85,6 +102,7 @@ void cdl_keyevents(int keysym, int keymod) {
     // Z Key
     if (keysym == 122) {
         write_rom_mapping();
+        cdl_log_memory = !cdl_log_memory;
         // should_change_jumps = true;
         //should_reverse_jumps = true;
         //time_last_reversed = time(0);
@@ -103,7 +121,7 @@ void resetCart() {
 }
 
 void readLibUltraSignatures() {
-    std::ifstream i("libultra.json");
+    std::ifstream i("libultra.mod.json");
     if (i.good()) {
         i >> libultra_signatures;
     } 
@@ -112,13 +130,13 @@ void readLibUltraSignatures() {
     }
 }
 void saveLibUltraSignatures() {
-    std::ofstream o("libultra.mod.json");
-    o << libultra_signatures.dump(4) << std::endl;
+    std::ofstream o("libultra.json");
+    o << libultra_signatures.dump(1) << std::endl;
 }
 
 
 void readLinkerMapFile() {
-    std::ifstream i("autofill.csv"); //"mario.json"
+    std::ifstream i("symbols.json"); //"mario.json"
     if (i.good()) {
         i >> linker_map_file;
     } else {
@@ -157,7 +175,11 @@ void readJsonFromFile() {
                 fileConfig["labels"] = R"([])"_json;
     if (fileConfig.find("jump_returns") == fileConfig.end())
                 fileConfig["jump_returns"] = R"([])"_json;
+    if (fileConfig.find("memory_to_log") == fileConfig.end())
+                fileConfig["memory_to_log"] = R"([])"_json;
 
+    memory_to_log = fileConfig["memory_to_log"].get< std::map<uint32_t,string> >();
+    memory_to_log[0x0E5320] = "rsp.boot";
     jumps = fileConfig["jumps"].get< std::map<uint32_t,char> >();
     tlbs = fileConfig["tlbs"].get< std::map<uint32_t,cdl_tlb> >();
     dmas = fileConfig["dmas"].get< std::map<uint32_t,cdl_dma> >();
@@ -172,7 +194,7 @@ void saveJsonToFile() {
     filename += ROM_PARAMS.headername;
     filename += ".json";
     std::ofstream o(filename);
-    o << fileConfig.dump(4) << std::endl;
+    o << fileConfig.dump(1) << std::endl;
 }
 
 void show_interface() {
@@ -255,7 +277,8 @@ uint32_t map_assembly_offset_to_rom_offset(uint32_t assembly_offset, uint32_t tl
 // these are all the data regions
 // for assembly regions check out the tlb
 string create_n64_split_regions(cdl_dma d) { //uint8_t* header_bytes, uint32_t proper_cart_address, uint32_t length, uint32_t dram_addr, uint32_t frame,  bool is_assembly, uint32_t tbl_mapped_addr) {
-    uint8_t* header_bytes = (uint8_t*)&d.header;
+    // uint8_t* header_bytes = (uint8_t*)&d.header;
+    uint32_t header_bytes = __builtin_bswap32(d.header);
     std::stringstream sstream, header;
     string region_type = "bin";
     if (d.is_assembly) {
@@ -263,10 +286,24 @@ string create_n64_split_regions(cdl_dma d) { //uint8_t* header_bytes, uint32_t p
     }
     string proper_cart_address_str = n2hexstr(d.rom_start);
     string ascii_header = d.ascii_header;
-    header << " header: " <<  ascii_header << " 0x" << std::hex << (header_bytes[3]+0) << (header_bytes[2]+0) << (header_bytes[1]+0) << (header_bytes[0]+0);
+    header << " header: " <<  ascii_header << " 0x" << std::hex << header_bytes; // (header_bytes[3]+0) << (header_bytes[2]+0) << (header_bytes[1]+0) << (header_bytes[0]+0);
     sstream << "  - [0x" << std::hex << d.rom_start << ", 0x"<< (d.rom_start+d.length);
-    sstream << ", \"" << region_type << "\",    \"_" << ascii_header << "_" << d.rom_start << "_len_"<< d.length;
-    sstream << "\"] # , 0x" << n2hexstr(d.dram_start) << "] frame:0x" << n2hexstr(d.frame) << header.str();
+    sstream << ", \"" << region_type << "\",   ";
+    if (strcmp(d.guess_type.c_str(), "audio") == 0) {
+        sstream << "\"" << d.guess_type << "_" << d.rom_start << "_len_"<< d.length;
+    } else {
+        sstream << "\"_" << ascii_header << "_" << "_" << d.rom_start << "_len_"<< d.length;
+    }
+
+    if (d.is_assembly) {
+        sstream << "\", 0x" << n2hexstr(d.dram_start) << "] # frame:0x" << n2hexstr(d.frame);
+    } else {
+        sstream << "\"] # (DRAM:0x" << n2hexstr(d.dram_start) << ") (frame:0x" << n2hexstr(d.frame) << ") ";
+    }
+
+    if (strcmp(d.guess_type.c_str(), "audio") != 0) {
+        sstream << header.str() << " trace:" << d.func_addr;
+    }
     //sstream << " Func:" << d.func_addr;
     
     if (d.tbl_mapped_addr>0) {
@@ -277,18 +314,10 @@ string create_n64_split_regions(cdl_dma d) { //uint8_t* header_bytes, uint32_t p
     return mapping;
 }
 
+uint32_t current_function = 0;
 void log_dma_write(uint8_t* mem, uint32_t proper_cart_address, uint32_t cart_addr, uint32_t length, uint32_t dram_addr) {
     if (dmas.find(proper_cart_address) != dmas.end() ) 
         return;
-
-    uint32_t current_function = 0;
-     // we know this function name: osPiRawStartDma
-     if (function_stack.size() > 0) {
-         current_function = function_stack.back();
-         if (labels.find(current_function) != labels.end()) {
-            labels[current_function].func_name = "osPiRawStartDma";
-        }
-     }
 
     auto t = cdl_dma();
     t.dram_start=dram_addr;
@@ -300,31 +329,69 @@ void log_dma_write(uint8_t* mem, uint32_t proper_cart_address, uint32_t cart_add
     t.header = mem[proper_cart_address+3];
     t.frame = l_CurrentFrame;
 
-    if (function_stack.size() > 0 && labels.find(current_function) != labels.end()) {
-        t.func_addr = labels[current_function].func_name;
-    }
+    // if (function_stack.size() > 0 && labels.find(current_function) != labels.end()) {
+    t.func_addr = print_function_stack_trace(); // labels[current_function].func_name;
+    // }
 
     dmas[proper_cart_address] = t;
+    string stack = print_function_stack_trace();
 
-    std::cout << "DMA: Dram:0x" << std::hex << t.dram_start << "->0x" << t.dram_end << " Length:0x" << t.length << " " << t.ascii_header << " Stack:" << function_stack.size() << "\n";
+    // std::cout << "DMA: Dram:0x" << std::hex << t.dram_start << "->0x" << t.dram_end << " Length:0x" << t.length << " " << t.ascii_header << " Stack:" << function_stack.size() << " " << t.func_addr << " last:"<< function_stack.back() << "\n";
     
 }
 
-
-void save_dram_rw_to_json() {
-    // Note if you save it here you might want to also update readJsonFromFile()
-    fileConfig["rsp_reads"] = rsp_reads;
-    fileConfig["rdram_reads"] = rdram_reads;
-    fileConfig["tlbs"] = tlbs;
-    fileConfig["dmas"] = dmas;
-    fileConfig["jumps"] = jumps;
-    //fileConfig["jump_data"] = jump_data;
-    fileConfig["audio_samples"] = audio_samples;
-    fileConfig["cart_rom_dma_writes"] = cart_rom_dma_writes;
-    fileConfig["dma_sp_writes"] = dma_sp_writes;
-    fileConfig["labels"] = labels;
-    fileConfig["function_signatures"] = function_signatures;
+void cdl_finish_pi_dma(uint32_t a) {
+    // cout <<std::hex<< "Finish PI DMA:" << a << "\n";
 }
+void cdl_finish_si_dma(uint32_t a) {
+    cout <<std::hex<< "Finish SI DMA:" << a << "\n";
+}
+void cdl_finish_ai_dma(uint32_t a) {
+    // cout <<std::hex<< "Finish AI DMA:" << (a & 0xffffff) << "\n";
+}
+
+void cdl_clear_dma_log() {
+    // next_dma_type = "cleared";
+}
+void cdl_clear_dma_log2() {
+    // next_dma_type = "interesting";
+}
+
+void cdl_log_cart_reg_access() {
+    // next_dma_type = "bin";
+}
+void cdl_log_si_reg_access() {
+    // next_dma_type = "si";
+}
+
+void cdl_log_audio_reg_access() {
+    // if (audio_functions.find(current_function) != audio_functions.end() ) 
+    //     return;
+    // if (function_stack.size() ==0 || labels.size() ==0 || function_stack.size() > 0xF) {
+    //     return;
+    // }
+    // next_dma_type = "audio";
+    // cout << std::hex << labels[function_stack.back()].func_name << " function is audio\n";
+}
+
+string print_function_stack_trace() {
+    if (function_stack.size() ==0 || labels.size() ==0 || function_stack.size() > 0xF) {
+        return "";
+    }
+    std::stringstream sstream;
+    for (auto& it : function_stack) {
+        if (strcmp(labels[it].func_name.c_str(),"") == 0) {
+            sstream << "0x" << it<< "->";
+            continue;
+        }
+        sstream << labels[it].func_name << "->";
+    }
+    // cout << "Stack:"<< sstream.str() << "\n";
+    return sstream.str();
+}
+
+
+
 
 void resetReversing() {
     time_last_reversed = time(0);
@@ -334,6 +401,8 @@ void resetReversing() {
 void save_cdl_files() {
     resetReversing();
     find_asm_sections();
+    find_audio_sections();
+    find_audio_functions();
     save_dram_rw_to_json();
     saveJsonToFile();
     saveLibUltraSignatures();
@@ -381,7 +450,7 @@ void write_rom_mapping() {
     file <<"  # start,  end,      type,     label\n";
     file <<"  - [0x000000, 0x000040, \"header\", \"header\"]\n";
     file <<"  - [0x000040, 0x000B70, \"asm\",    \"boot\"]\n";
-    file <<"  - [0x000B70, 0x001000, \"bin\",    \"bootbin\"]\n";
+    file <<"  - [0x000B70, 0x001000, \"bin\",    \"bootcode_font\"]\n";
     
 
     //
@@ -391,6 +460,7 @@ void write_rom_mapping() {
     // for (json::iterator it = fileConfig["mappings"].begin(); it != fileConfig["mappings"].end(); ++it) {
     for (auto& it : dmas) {
         auto t = it.second;
+        if (it.first ==0 || t.dram_start == 0) continue;
         file << create_n64_split_regions(t) << "\n";
     }
 
@@ -398,10 +468,11 @@ void write_rom_mapping() {
     file <<"# All label addresses are RAM addresses\n";
     file <<"# Order does not matter\n";
     file <<"labels:\n";
-    int8_t* entryPoint = (int8_t*)(void*)&ROM_HEADER.PC;
-    file << "   - [0x" << (entryPoint[0]+0) << (entryPoint[1]+0) << (entryPoint[2] +0)<< (entryPoint[3]+0) <<", \"EntryPoint\"]\n";
+    uint32_t entryPoint = ROM_HEADER.PC; // (int8_t*)(void*)&ROM_HEADER.PC;
+    file << "   - [0x" << std::hex << __builtin_bswap32(entryPoint)+0 <<", \"EntryPoint\"]\n";
     for (auto& it : labels) {
         auto t = it.second;
+        if (strcmp(t.func_offset.c_str(), "") == 0) continue;
         file << "   - [0x" << t.func_offset <<", \"" <<  t.func_name << "\"]\n";
     }
 
@@ -421,11 +492,17 @@ int reverse_jump(int take_jump, uint32_t jump_target) {
 }
 
 void cdl_log_jump_cached(int take_jump, uint32_t jump_target, uint8_t* jump_target_memory) {
+    if (cached_jumps.find(jump_target) != cached_jumps.end() ) 
+        return;
+    cached_jumps[jump_target] = 1;
     cout << "Cached:" << std::hex << jump_target << "\n";
 }
-void cdl_log_jump_always(int take_jump, uint32_t jump_target, uint8_t* jump_target_memory) {
+
+void cdl_log_jump_always(int take_jump, uint32_t jump_target, uint8_t* jump_target_memory, uint32_t ra) {
+    previous_ra.push_back(ra);
     uint32_t previous_function_backup = function_stack.back();
     function_stack.push_back(jump_target);
+    current_function = jump_target;
 
     if (jumps[jump_target] >3) return;
     jumps[jump_target] = 0x04;
@@ -435,23 +512,48 @@ void cdl_log_jump_always(int take_jump, uint32_t jump_target, uint8_t* jump_targ
     auto t = cdl_labels();
     string jump_target_str = n2hexstr(jump_target);
     t.func_offset = jump_target_str;
-    t.caller_offset = labels[previous_function_backup].func_name;
+    if (labels.find(previous_function_backup) != labels.end()) {
+        t.caller_offset = labels[previous_function_backup].func_name;
+    } else {
+        t.caller_offset = n2hexstr(previous_function_backup);
+    }
     t.func_name = game_name+"_func_"+jump_target_str;
     t.func_stack = function_stack.size();
+    t.stack_trace = print_function_stack_trace();
+    t.doNotLog = false;
     labels[jump_target] = t;
     jump_data[jump_target] = jump_target_memory;
 }
-void cdl_log_jump_return(int take_jump, uint32_t jump_target, uint32_t pc) {
+void cdl_log_jump_return(int take_jump, uint32_t jump_target, uint32_t pc, uint32_t ra) {
     uint32_t previous_function_backup = -1;
+
+    // if (previous_function_backup > ra) {
+    //     // cout << std::hex << " Odd the prev function start should never be before return address ra:" << ra << " previous_function_backup:" << previous_function_backup << "\n";
+    //     return;
+    // }
+
     if (function_stack.size()>0) {
         previous_function_backup = function_stack.back();
         function_stack.pop_back();
+        current_function = function_stack.back();
     }
     else {
-        // cout << "Missed push back?";
+        // probably jumping from exception?
+        // cout << "Missed push back?" << std::hex << jump_target << " ra" << ra << " pc:"<< pc<< "\n";
+        // return;
+    }
+
+    if (jump_target == previous_ra.back()) {
+        previous_ra.pop_back();
+    } else {
         return;
     }
 
+#ifdef support_n64_prints
+    if (strcmp(labels[previous_function_backup].func_name.c_str(),"osSyncPrintf") ==0) {
+                cout << "\nosSyncPrintf: todo need to get stack mem\n";
+    }
+#endif
 
     if (jumps[jump_target] >3) return;
     jumps[jump_target] = 0x04;
@@ -481,23 +583,42 @@ void cdl_log_jump_return(int take_jump, uint32_t jump_target, uint32_t pc) {
         string bytes = printBytesToStr(jump_data[previous_function_backup], byte_len)+"_"+n2hexstr(length);
         string bytes_with_branch_delay = printBytesToStr(jump_data[previous_function_backup], byte_len+4)+"_"+n2hexstr(length+4);
         labels[previous_function_backup].function_bytes = bytes_with_branch_delay;
+        labels[previous_function_backup].doNotLog = true;
         // labels[previous_function_backup].function_bytes_endian = Swap4Bytes(bytes);
         
-
+        // now check to see if its in the mario map
+        // if (/*strcmp(game_name.c_str(),"SUPERMARIO") == 0 &&*/ linker_map_file.find( n2hexstr(previous_function_backup) ) != linker_map_file.end()) {
+        //     string offset = n2hexstr(previous_function_backup);
+        //     string func_name = linker_map_file[offset];
+        //     cout << game_name << "It is in the map file!" << n2hexstr(previous_function_backup) << " as:" << linker_map_file[n2hexstr(previous_function_backup)] << "\n";
+        //     function_signatures[bytes] = func_name;
+        //     if (strcmp(func_name.c_str(),"gcc2_compiled.")==0) return; // we don't want gcc2_compiled labels
+        //     libultra_signatures["function_signatures"][bytes_with_branch_delay] = func_name;
+        //     labels[previous_function_backup].func_name = libultra_signatures["function_signatures"][bytes_with_branch_delay];
+        //     return;
+        // }
         
 
         // if it is a libultra function then lets name it
         if (libultra_signatures["function_signatures"].find(bytes_with_branch_delay) != libultra_signatures["function_signatures"].end()) {
             std::cout << "In new libultra:" <<  bytes_with_branch_delay << " name:"<< libultra_signatures["function_signatures"][bytes_with_branch_delay] << "\n";
             labels[previous_function_backup].func_name = libultra_signatures["function_signatures"][bytes_with_branch_delay];
+            if (labels[previous_function_backup].func_name.find("_func_") != std::string::npos) {
+                // this is a non renamed function as it was auto generated
+            }
+            else {
+                labels[previous_function_backup].isRenamed = true;
+            }
+            libultra_signatures["function_signatures"].erase(bytes);
             // return since we have already named this functions, don't need its signature to be saved
             return;
         }
 
         // if it is an OLD libultra function then lets name it (without branch delay)
         if (libultra_signatures["function_signatures"].find(bytes) != libultra_signatures["function_signatures"].end()) {
-            std::cout << "In libultra:" <<  bytes << " name:"<< libultra_signatures["function_signatures"][bytes] << "\n";
+            std::cout << "In OLD libultra:" <<  bytes << " name:"<< libultra_signatures["function_signatures"][bytes] << "\n";
             labels[previous_function_backup].func_name = libultra_signatures["function_signatures"][bytes];
+            labels[previous_function_backup].isRenamed = true;
             libultra_signatures["function_signatures"][bytes_with_branch_delay] = labels[previous_function_backup].func_name;
             // delete the old non-branch delay version
             libultra_signatures["function_signatures"].erase(bytes);
@@ -505,21 +626,16 @@ void cdl_log_jump_return(int take_jump, uint32_t jump_target, uint32_t pc) {
             return;
         }
 
-        // now check to see if its in the mario map
-        // if (/*strcmp(game_name.c_str(),"SUPERMARIO") == 0 &&*/ linker_map_file.find( n2hexstr(previous_function_backup) ) != linker_map_file.end()) {
-        //     cout << game_name << "It is in the map file!" << n2hexstr(previous_function_backup) << " as:" << linker_map_file[n2hexstr(previous_function_backup)] << "\n";
-        //     function_signatures[bytes] = linker_map_file[n2hexstr(previous_function_backup)];
-        //     return;
-        // }
-        // linker_map_file
+        
         // std::cout << "Not in lib_ultra " << bytes << "\n";
 
         if (function_signatures.find(bytes_with_branch_delay) == function_signatures.end()) {
+            // save this new function to both libultra and trace json
             function_signatures[bytes_with_branch_delay] = labels[previous_function_backup].func_name;
             libultra_signatures["function_signatures"][bytes_with_branch_delay] = labels[previous_function_backup].func_name;
         } else {
             //function_signatures.erase(bytes);
-            function_signatures[bytes_with_branch_delay] = "Multiple functions";
+            // function_signatures[bytes_with_branch_delay] = "Multiple functions";
             std::cout << "Multiple Functions for :" << *jump_data[previous_function_backup] << " len:" << length << " pc:0x"<< pc << " - 0x" << previous_function_backup << "\n";
         }
     }
@@ -538,11 +654,6 @@ unsigned int find_first_non_executed_jump() {
         }
     }
     return -1;
-}
-
-bool is_physical_data_mapped_using_tlb() {
-    // todo
-    return false;
 }
 
 int cdl_log_jump(int take_jump, uint32_t jump_target) {
@@ -682,6 +793,34 @@ void find_asm_sections() {
     }
 }
 
+void find_audio_sections() {
+    printf("finding audio sections \n");
+    for(map<u_int32_t, cdl_dma>::iterator it = dmas.begin(); it != dmas.end(); ++it) {
+        u_int32_t address = it->second.dram_start;
+        if (audio_address.find(address) == audio_address.end() ) 
+            continue;
+        dmas[address].guess_type = "audio";
+        it->second.guess_type="audio";
+    }
+}
+
+void find_audio_functions() {
+    printf("finding audio functions \n");
+    for(map<u_int32_t, cdl_labels>::iterator it = labels.begin(); it != labels.end(); ++it) {
+        cdl_labels label = it->second;
+        if (label.isRenamed) {
+            continue; // only do it for new functions
+        }
+        for(map<string, string>::iterator it2 = label.addresses.begin(); it2 != label.addresses.end(); ++it2) {
+            u_int32_t address = hex_to_int(it2->first);
+            if (audio_address.find(address) == audio_address.end() ) 
+                continue;
+            cout << "Function IS audio:"<< label.func_name << "\n";
+            break;
+        }
+    }
+}
+
 void cdl_log_audio_sample(uint32_t saved_ai_dram, uint32_t saved_ai_length) {
     if (audio_samples.find(saved_ai_dram) != audio_samples.end() ) 
         return;
@@ -689,7 +828,7 @@ void cdl_log_audio_sample(uint32_t saved_ai_dram, uint32_t saved_ai_length) {
     t.dram_offset = n2hexstr(saved_ai_dram);
     t.rom_offset = n2hexstr(saved_ai_length);
     audio_samples[saved_ai_dram] = t;
-    printf("audio_plugin_push_samples AI_DRAM_ADDR_REG:%#08x length:%#08x\n", saved_ai_dram, saved_ai_length);
+    // printf("audio_plugin_push_samples AI_DRAM_ADDR_REG:%#08x length:%#08x\n", saved_ai_dram, saved_ai_length);
 }
 
 void cdl_log_cart_rom_dma_write(uint32_t dram_addr, uint32_t cart_addr, uint32_t length) {
@@ -704,9 +843,6 @@ void cdl_log_cart_rom_dma_write(uint32_t dram_addr, uint32_t cart_addr, uint32_t
 }
 
 void cdl_log_dma_sp_write(uint32_t spmemaddr, uint32_t dramaddr, uint32_t length, unsigned char *dram) {
-    #ifndef USE_CDL
-        return;
-    #endif
     if (dma_sp_writes.find(dramaddr) != dma_sp_writes.end() ) 
         return;
     auto t = cdl_dram_cart_map();
@@ -716,6 +852,139 @@ void cdl_log_dma_sp_write(uint32_t spmemaddr, uint32_t dramaddr, uint32_t length
     // FrameBuffer RSP info
     printWords(dram, dramaddr, length);
     printf("FB: dma_sp_write SPMemAddr:%#08x Dramaddr:%#08x length:%#08x  \n", spmemaddr, dramaddr, length);
+}
+
+inline void cdl_log_memory_common(const uint32_t lsaddr, uint32_t pc) {
+    if (labels[current_function].isRenamed || labels[current_function].doNotLog) {
+        // only do it for new functions
+        return;
+    }
+    auto currentMap = addresses[lsaddr];
+    currentMap[n2hexstr(lsaddr)]=labels[current_function].func_name+"("+n2hexstr(current_function)+"+"+n2hexstr(pc-current_function)+")";
+
+    auto offset = pc-current_function;
+    labels[current_function].addresses[n2hexstr(lsaddr)] = n2hexstr(offset);
+
+    if (addresses.find(lsaddr) != addresses.end() ) 
+        return;
+    addresses[lsaddr] = currentMap;
+}
+
+void cdl_log_mem_read(const uint32_t lsaddr, uint32_t pc) {
+    if (!cdl_log_memory) return;
+    if (memory_to_log.find(lsaddr) != memory_to_log.end() ) 
+    {
+        cout << "Logging Mem Read for 0x"<< std::hex << lsaddr << " At PC:" << pc <<"\n";
+    }
+
+    cdl_log_memory_common(lsaddr, pc);
+}
+
+void cdl_log_mem_write(const uint32_t lsaddr, uint32_t pc) {
+    if (!cdl_log_memory) return;
+    
+    if (memory_to_log.find(lsaddr) != memory_to_log.end() ) 
+    {
+        cout << "Logging Mem Write to 0x"<< std::hex << lsaddr << " At PC:" << pc <<"\n";
+    }
+    cdl_log_memory_common(lsaddr, pc);
+    // if (labels[current_function].isRenamed || labels[current_function].doNotLog) {
+    //     // only do it for new functions
+    //     return;
+    // }
+    // auto currentMap = addresses[lsaddr];
+    // currentMap[n2hexstr(lsaddr)]=labels[current_function].func_name+"("+n2hexstr(current_function)+"+"+n2hexstr(pc-current_function)+")";
+
+    // auto offset = pc-current_function;
+    // labels[current_function].addresses[n2hexstr(lsaddr)] = n2hexstr(offset);
+    // if (addresses.find(lsaddr) != addresses.end() ) 
+    //     return;
+    // addresses[lsaddr] = currentMap;
+}
+
+void cdl_hit_memory_log_point(uint32_t address) {
+    if (address>0x10000000 && address <= 0x107fffff) {
+        cout << "Cart Memory access!" << std::hex << address << "\n";
+    }
+}
+
+void cdl_log_masked_write(uint32_t* address, uint32_t dst2) {
+    if (!cdl_log_memory) return;
+    // cout << "masked write:"<<std::hex<<dst<<" : "<<dst2<<"\n";
+    // if (memory_to_log.find(address) != memory_to_log.end() ) 
+    // {
+    //     cout << "Logging Mem Write to 0x"<< std::hex << address << " At PC:" <<"\n";
+    // }
+}
+
+void cdl_log_get_mem_handler(uint32_t address) {
+    if (!cdl_log_memory) return;
+    cdl_hit_memory_log_point(address);
+    if (memory_to_log.find(address) != memory_to_log.end() ) 
+    {
+        cout << "Logging Mem cdl_log_get_mem_handler access 0x"<< std::hex << address <<"\n";
+        cdl_hit_memory_log_point(address);
+    }
+}
+void cdl_log_mem_read32(uint32_t address) {
+    if (!cdl_log_memory) return;
+    cdl_hit_memory_log_point(address);
+    if (memory_to_log.find(address) != memory_to_log.end() ) 
+    {
+        cout << "Logging Mem cdl_log_mem_read32 access 0x"<< std::hex << address <<"\n";
+        cdl_hit_memory_log_point(address);
+    }
+}
+void cdl_log_mem_write32(uint32_t address) {
+    if (!cdl_log_memory) return;
+    cdl_hit_memory_log_point(address);
+    if (memory_to_log.find(address) != memory_to_log.end() ) 
+    {
+        cout << "Logging Mem cdl_log_mem_write32 access 0x"<< std::hex << address <<"\n";
+        cdl_hit_memory_log_point(address);
+    }
+}
+
+string mapping_names[] = {
+    "M64P_MEM_NOTHING",
+    "M64P_MEM_NOTHING",
+    "M64P_MEM_RDRAM",
+    "M64P_MEM_RDRAMREG",
+    "M64P_MEM_RSPMEM",
+    "M64P_MEM_RSPREG",
+    "M64P_MEM_RSP",
+    "M64P_MEM_DP",
+    "M64P_MEM_DPS",
+    "M64P_MEM_VI",
+    "M64P_MEM_AI",
+    "M64P_MEM_PI",
+    "M64P_MEM_RI",
+    "M64P_MEM_SI",
+    "M64P_MEM_FLASHRAMSTAT",
+    "M64P_MEM_ROM",
+    "M64P_MEM_PIF",
+    "M64P_MEM_MI"
+};
+
+void cdl_log_memory_mappings(mem_mapping* mappings, uint32_t number_of_mappings) {
+    for (int i=0; i<=number_of_mappings; i++) {
+        std::stringstream s;
+        auto mapping = mappings[i];
+        s << "Mapping:" << mapping_names[mapping.type+0] << " " << std::hex << mapping.begin << "->" << mapping.end << "\n";
+        fileConfig["memMap"][i] = s.str();
+    }
+}
+
+#define CDL_ALIST 0
+void cdl_log_rsp(uint32_t log_type, uint32_t address, const char * extra_data) {
+    if (log_type == CDL_ALIST) {
+        if (audio_address.find(address) != audio_address.end() ) 
+            return;
+        audio_address[address] = n2hexstr(address)+extra_data;
+        // cout << "Alist address:" << std::hex << address << " " << extra_data << "\n";
+        return;
+    }
+    cout << "Log rsp\n";
 }
 
 } // end extern C
