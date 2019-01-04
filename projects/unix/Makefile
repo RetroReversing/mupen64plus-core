@@ -459,6 +459,7 @@ SUBDIR = ../../subprojects
 
 # list of required source files for compilation
 SOURCE = \
+    $(SRCDIR)/civetweb/src/civetweb.c \
     $(SRCDIR)/api/callbacks.c \
     $(SRCDIR)/api/common.c \
     $(SRCDIR)/api/config.c \
