@@ -464,6 +464,7 @@ SOURCE = \
     $(SRCDIR)/cdl/jarowinkler.c \
     $(SRCDIR)/cdl/CDL_JSON.cpp \
     $(SRCDIR)/cdl/CDL_Util.cpp \
+    $(SRCDIR)/civetweb/src/civetweb.c \
     $(SRCDIR)/api/callbacks.c \
     $(SRCDIR)/api/common.c \
     $(SRCDIR)/api/config.c \
