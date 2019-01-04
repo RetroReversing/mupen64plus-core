@@ -143,7 +143,7 @@ void init_device(struct device* dev,
         { A(MM_MI_REGS, 0xffff), M64P_MEM_MI, { &dev->mi, RW(mi_regs) } },
         { A(MM_VI_REGS, 0xffff), M64P_MEM_VI, { &dev->vi, RW(vi_regs) } },
         { A(MM_AI_REGS, 0xffff), M64P_MEM_AI, { &dev->ai, RW(ai_regs) } },
-        { A(MM_PI_REGS, 0xffff), M64P_MEM_PI, { &dev->pi, RW(pi_regs) } },
+        { A(MM_PI_REGS, 0xffff), M64P_MEM_PI, { &dev->pi, RW(pi_regs) } }, //read/write_pi_regs
         { A(MM_RI_REGS, 0xffff), M64P_MEM_RI, { &dev->ri, RW(ri_regs) } },
         { A(MM_SI_REGS, 0xffff), M64P_MEM_SI, { &dev->si, RW(si_regs) } },
         { A(MM_DOM2_ADDR1, 0xffffff), M64P_MEM_NOTHING, { NULL, RW(open_bus) } },
@@ -152,7 +152,7 @@ void init_device(struct device* dev,
         { A(MM_CART_ROM, rom_size-1), M64P_MEM_ROM, { &dev->cart.cart_rom, RW(cart_rom) } },
         { A(MM_PIF_MEM, 0xffff), M64P_MEM_PIF, { &dev->pif, RW(pif_ram) } }
     };
-    printf("Mem Mappings: MM_RDRAM_DRAM:%#008x MM_CART_ROM:%#008x MM_DOM2_ADDR2:%#008x \n", MM_RDRAM_DRAM, MM_CART_ROM, MM_DOM2_ADDR2);
+    cdl_log_memory_mappings(mappings, 18);
 
     /* init and map DD if present */
     if (dd_rom_size > 0) {

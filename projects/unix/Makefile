@@ -461,6 +461,8 @@ SUBDIR = ../../subprojects
 # $(SRCDIR)/cdl/CDL_MemoryMapper.cpp 
 SOURCE = \
     $(SRCDIR)/cdl/CDL_interface.cpp \
+    $(SRCDIR)/cdl/jarowinkler.c \
+    $(SRCDIR)/cdl/CDL_JSON.cpp \
     $(SRCDIR)/cdl/CDL_Util.cpp \
     $(SRCDIR)/api/callbacks.c \
     $(SRCDIR)/api/common.c \

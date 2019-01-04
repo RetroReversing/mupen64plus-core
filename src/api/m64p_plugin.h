@@ -69,6 +69,7 @@ typedef struct {
     void (*ProcessAlistList)(void);
     void (*ProcessRdpList)(void);
     void (*ShowCFB)(void);
+    void (*cdl_log_rsp)(uint32_t log_type, uint32_t address, const char * extra_data);
 } RSP_INFO;
 
 typedef struct {
@@ -201,6 +202,7 @@ EXPORT void CALL MoveScreen(int x, int y);
 EXPORT void CALL ProcessDList(void);
 EXPORT void CALL ProcessRDPList(void);
 EXPORT void CALL ShowCFB(void);
+EXPORT void CALL cdl_log_rsp(uint32_t log_type, uint32_t address, const char * extra_data);
 EXPORT void CALL UpdateScreen(void);
 EXPORT void CALL ViStatusChanged(void);
 EXPORT void CALL ViWidthChanged(void);

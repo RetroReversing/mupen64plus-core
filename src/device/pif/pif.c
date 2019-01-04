@@ -300,7 +300,7 @@ void read_pif_ram(void* opaque, uint32_t address, uint32_t* value)
 
 void write_pif_ram(void* opaque, uint32_t address, uint32_t value, uint32_t mask)
 {
-    printf("write_pif_ram: addr: %u value:%d \n", address, value);
+    printf("write_pif_ram: addr: %#08x value:%#08x \n", address, value);
 
     struct pif* pif = (struct pif*)opaque;
     uint32_t addr = pif_ram_address(address);

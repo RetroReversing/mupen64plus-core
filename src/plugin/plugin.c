@@ -177,6 +177,7 @@ static m64p_error plugin_connect_gfx(m64p_dynlib_handle plugin_handle)
             !GET_FUNC(ptr_RomClosed, gfx.romClosed, "RomClosed") ||
             !GET_FUNC(ptr_RomOpen, gfx.romOpen, "RomOpen") ||
             !GET_FUNC(ptr_ShowCFB, gfx.showCFB, "ShowCFB") ||
+            // !GET_FUNC(ptr_cdl_log_rsp, cdl_log_rsp, "cdl_log_rsp") ||
             !GET_FUNC(ptr_UpdateScreen, gfx.updateScreen, "UpdateScreen") ||
             !GET_FUNC(ptr_ViStatusChanged, gfx.viStatusChanged, "ViStatusChanged") ||
             !GET_FUNC(ptr_ViWidthChanged, gfx.viWidthChanged, "ViWidthChanged") ||
@@ -486,6 +487,8 @@ static m64p_error plugin_connect_rsp(m64p_dynlib_handle plugin_handle)
     return M64ERR_SUCCESS;
 }
 
+void cdl_log_rsp(uint32_t log_type, uint32_t address, const char * extra_data);
+
 static m64p_error plugin_start_rsp(void)
 {
     /* fill in the RSP_INFO data structure */
@@ -515,6 +518,7 @@ static m64p_error plugin_start_rsp(void)
     rsp_info.ProcessAlistList = audio.processAList;
     rsp_info.ProcessRdpList = gfx.processRDPList;
     rsp_info.ShowCFB = gfx.showCFB;
+    rsp_info.cdl_log_rsp = cdl_log_rsp;
 
     /* call the RSP plugin  */
     rsp.initiateRSP(rsp_info, NULL);

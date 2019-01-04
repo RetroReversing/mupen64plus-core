@@ -54,7 +54,6 @@
 #define PCADDR *r4300_pc(r4300)
 #define ADD_TO_PC(x) (*r4300_pc_struct(r4300)) += x;
 #define DECLARE_INSTRUCTION(name) void cached_interp_##name(void)
-void cdl_log_jump(int take_jump, uint32_t jump_target);
 
 #define DECLARE_JUMP(name, destination, condition, link, likely, cop1) \
 void cached_interp_##name(void) \
@@ -62,7 +61,6 @@ void cached_interp_##name(void) \
     DECLARE_R4300 \
     const int take_jump = (condition); \
     const uint32_t jump_target = (destination); \
-    cdl_log_jump(take_jump, jump_target); \
     int64_t *link_register = (link); \
     if (cop1 && check_cop1_unusable(r4300)) return; \
     if (link_register != &r4300_regs(r4300)[0]) \
@@ -79,6 +77,8 @@ void cached_interp_##name(void) \
         r4300->delay_slot=0; \
         if (take_jump && !r4300->skip_jump) \
         { \
+            uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300)); \
+            cdl_log_jump(take_jump, jump_target, op_address, *r4300_pc(r4300), r4300_regs(r4300)[31]); \
             (*r4300_pc_struct(r4300))=r4300->cached_interp.actual->block+((jump_target-r4300->cached_interp.actual->start)>>2); \
         } \
     } \
@@ -112,6 +112,8 @@ void cached_interp_##name##_OUT(void) \
         r4300->delay_slot=0; \
         if (take_jump && !r4300->skip_jump) \
         { \
+            uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300)); \
+            cdl_log_jump(take_jump, jump_target, op_address, *r4300_pc(r4300), r4300_regs(r4300)[31]); \
             generic_jump_to(r4300, jump_target); \
         } \
     } \
@@ -150,6 +152,7 @@ void cached_interp_##name(void) \
     if (cop1 && check_cop1_unusable(r4300)) return; \
     if (link_register != &r4300_regs(r4300)[0]) \
     { \
+    /* update the return register if its not already the pc?*/ \
         *link_register = SE32(*r4300_pc(r4300) + 8); \
     } \
     if (!likely || take_jump) \
@@ -164,8 +167,8 @@ void cached_interp_##name(void) \
         { \
             jump_target = cdl_get_alternative_jump(jump_target); \
             (*r4300_pc_struct(r4300))=r4300->cached_interp.actual->block+((jump_target-r4300->cached_interp.actual->start)>>2); \
-            uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300));\
-			cdl_log_jump_always(take_jump, jump_target, op_address); \
+            uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300)); \
+            cdl_log_jump_always(take_jump, jump_target, op_address, r4300_regs(r4300)[31], *r4300_pc(r4300)); \
         } \
     } \
     else \
@@ -200,8 +203,8 @@ void cached_interp_##name##_OUT(void) \
         { \
             jump_target = cdl_get_alternative_jump(jump_target); \
             generic_jump_to(r4300, jump_target); \
-            uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300));\
-			cdl_log_jump_always(take_jump, jump_target, op_address); \
+            uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300)); \
+            cdl_log_jump_always(take_jump, jump_target, op_address, r4300_regs(r4300)[31], *r4300_pc(r4300)); \
         } \
     } \
     else \
@@ -229,13 +232,13 @@ void cached_interp_##name##_IDLE(void) \
     } \
     else cached_interp_##name(); \
 }
+// This is actually Jump REGISTER but often used for return when passing $ra
 #define DECLARE_JUMP_RETURN(name, destination, condition, link, likely, cop1) \
 void cached_interp_##name(void) \
 { \
     DECLARE_R4300 \
     const int take_jump = (condition); \
     const uint32_t jump_target = (destination); \
-    cdl_log_jump_return(take_jump, jump_target, *r4300_pc(r4300)); \
     int64_t *link_register = (link); \
     if (cop1 && check_cop1_unusable(r4300)) return; \
     if (link_register != &r4300_regs(r4300)[0]) \
@@ -244,6 +247,10 @@ void cached_interp_##name(void) \
     } \
     if (!likely || take_jump) \
     { \
+    if (destination != r4300_regs(r4300)[31]) {\
+    /*printf("Jump target is not $ra\n");*/\
+    } else { \
+        cdl_log_jump_return(take_jump, jump_target, *r4300_pc(r4300), r4300_regs(r4300)[31], r4300_regs(r4300), r4300);}\
         (*r4300_pc_struct(r4300))++; \
         r4300->delay_slot=1; \
         UPDATE_DEBUGGER(); \
@@ -269,7 +276,6 @@ void cached_interp_##name##_OUT(void) \
     DECLARE_R4300 \
     const int take_jump = (condition); \
     const uint32_t jump_target = (destination); \
-    cdl_log_jump_return(take_jump, jump_target, *r4300_pc(r4300)); \
     int64_t *link_register = (link); \
     if (cop1 && check_cop1_unusable(r4300)) return; \
     if (link_register != &r4300_regs(r4300)[0]) \
@@ -278,6 +284,10 @@ void cached_interp_##name##_OUT(void) \
     } \
     if (!likely || take_jump) \
     { \
+    if (destination != r4300_regs(r4300)[31]) {\
+    /*printf("Jump target is not $ra\n");*/\
+    } else { \
+        cdl_log_jump_return(take_jump, jump_target, *r4300_pc(r4300), r4300_regs(r4300)[31], r4300_regs(r4300), r4300);} \
         (*r4300_pc_struct(r4300))++; \
         r4300->delay_slot=1; \
         UPDATE_DEBUGGER(); \
@@ -333,7 +343,7 @@ void cached_interp_##name##_IDLE(void) \
 #define cfft (*r4300_pc_struct(r4300))->f.cf.ft
 #define cffs (*r4300_pc_struct(r4300))->f.cf.fs
 #define cffd (*r4300_pc_struct(r4300))->f.cf.fd
-
+// .f = field?
 /* 32 bits macros */
 #ifndef M64P_BIG_ENDIAN
 #define rrt32 *((int32_t*) (*r4300_pc_struct(r4300))->f.r.rt)
@@ -386,8 +396,8 @@ Used by dynarec only, check should be unnecessary
             (*r4300_pc_struct(r4300))->ops();
             r4300->cached_interp.actual = blk;
             (*r4300_pc_struct(r4300)) = inst+1;
-            uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300));
-			cdl_log_jump_cached(1, ((*r4300_pc_struct(r4300))-1)->addr+4, op_address);
+            // uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300));
+			// cdl_log_jump_cached(1, ((*r4300_pc_struct(r4300))-1)->addr+4, op_address);
         }
         else
             (*r4300_pc_struct(r4300))->ops();
@@ -869,6 +879,9 @@ enum r4300_opcode r4300_decode(struct precomp_instr* inst, struct r4300_core* r4
 
     /* set appropriate handler */
     inst->ops = ci_table[opcode];
+    int program_counter = (*r4300_pc(r4300));
+	uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300));
+    cdl_log_opcode(program_counter, op_address);
 
     /* propagate opcode info to allow further processing */
     return opcode;

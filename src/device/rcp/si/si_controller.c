@@ -59,8 +59,11 @@ static int validate_dma(struct si_controller* si, uint32_t reg)
     return 1;
 }
 
+void cdl_log_copy_pif_rdram();
 static void copy_pif_rdram(struct si_controller* si)
 {
+    cdl_log_copy_pif_rdram();
+    // used for joysticks, rumble pak etc
     size_t i;
     /* DRAM address must be word-aligned */
     uint32_t dram_addr = si->regs[SI_DRAM_ADDR_REG] & ~UINT32_C(3);
@@ -82,6 +85,7 @@ static void copy_pif_rdram(struct si_controller* si)
 
 static void dma_si_write(struct si_controller* si)
 {
+    cdl_log_si_reg_access();
     if (!validate_dma(si, SI_PIF_ADDR_WR64B_REG))
         return;
 
@@ -94,10 +98,12 @@ static void dma_si_write(struct si_controller* si)
     add_interrupt_event(&si->mi->r4300->cp0, SI_INT, si->dma_duration + add_random_interrupt_time(si->mi->r4300));
 }
 
+void cdl_log_dma_si_read();
 static void dma_si_read(struct si_controller* si)
 {
     if (!validate_dma(si, SI_PIF_ADDR_RD64B_REG))
         return;
+    cdl_log_dma_si_read();
 
     si->dma_dir = SI_DMA_READ;
 
@@ -126,9 +132,10 @@ void poweron_si(struct si_controller* si)
     si->dma_dir = SI_NO_DMA;
 }
 
-
+void cdl_common_log_tag(const char* tag); 
 void read_si_regs(void* opaque, uint32_t address, uint32_t* value)
 {
+    cdl_common_log_tag("_readSiRegs");
     struct si_controller* si = (struct si_controller*)opaque;
     uint32_t reg = si_reg(address);
 
@@ -137,6 +144,7 @@ void read_si_regs(void* opaque, uint32_t address, uint32_t* value)
 
 void write_si_regs(void* opaque, uint32_t address, uint32_t value, uint32_t mask)
 {
+    cdl_common_log_tag("_writeSiRegs");
     struct si_controller* si = (struct si_controller*)opaque;
     uint32_t reg = si_reg(address);
 
@@ -179,6 +187,7 @@ void si_end_of_dma_event(void* opaque)
     /* end DMA */
     si->dma_dir = SI_NO_DMA;
     si->regs[SI_STATUS_REG] &= ~SI_STATUS_DMA_BUSY;
+    // cdl_finish_si_dma( si->regs[SI_DRAM_ADDR_REG]);
 
     /* raise si interrupt */
     si->regs[SI_STATUS_REG] |= SI_STATUS_INTERRUPT;

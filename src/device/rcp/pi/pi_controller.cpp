@@ -173,20 +173,22 @@ void poweron_pi(struct pi_controller* pi)
 {
     memset(pi->regs, 0, PI_REGS_COUNT*sizeof(uint32_t));
 }
-
+void cdl_log_pi_reg_read();
+void cdl_log_pi_reg_write();
 void read_pi_regs(void* opaque, uint32_t address, uint32_t* value)
 {
+    cdl_log_pi_reg_read();
     struct pi_controller* pi = (struct pi_controller*)opaque;
     uint32_t reg = pi_reg(address);
 
     *value = pi->regs[reg];
 }
-
+void cdl_clear_dma_log2();
 void write_pi_regs(void* opaque, uint32_t address, uint32_t value, uint32_t mask)
 {
     struct pi_controller* pi = (struct pi_controller*)opaque;
     uint32_t reg = pi_reg(address);
-
+    cdl_log_pi_reg_write();
     switch (reg)
     {
     case PI_CART_ADDR_REG:
@@ -204,6 +206,7 @@ void write_pi_regs(void* opaque, uint32_t address, uint32_t value, uint32_t mask
 
     case PI_WR_LEN_REG:
         masked_write(&pi->regs[PI_WR_LEN_REG], value, mask);
+        // cdl_clear_dma_log2();
         dma_pi_write(pi);
         return;
 
@@ -228,7 +231,7 @@ void write_pi_regs(void* opaque, uint32_t address, uint32_t value, uint32_t mask
 
     masked_write(&pi->regs[reg], value, mask);
 }
-
+void cdl_finish_pi_dma(uint32_t a);
 void pi_end_of_dma_event(void* opaque)
 {
     struct pi_controller* pi = (struct pi_controller*)opaque;
@@ -240,6 +243,7 @@ void pi_end_of_dma_event(void* opaque)
             dd_update_bm(pi->dd);
         }
     }
+    cdl_finish_pi_dma(pi->regs[PI_DRAM_ADDR_REG]);
 
     raise_rcp_interrupt(pi->mi, MI_INTR_PI);
 }

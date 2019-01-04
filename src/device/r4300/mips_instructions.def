@@ -130,6 +130,7 @@ DECLARE_INSTRUCTION(LB)
     ADD_TO_PC(1);
     uint32_t value;
     unsigned int shift = bshift(lsaddr);
+    cdl_log_mem_read(lsaddr, PCADDR);
 
     if (r4300_read_aligned_word(r4300, lsaddr, &value)) {
         *lsrtp = SE8((value >> shift) & 0xff);
@@ -144,6 +145,7 @@ DECLARE_INSTRUCTION(LBU)
     ADD_TO_PC(1);
     uint32_t value;
     unsigned int shift = bshift(lsaddr);
+    cdl_log_mem_read(lsaddr, PCADDR);
 
     if (r4300_read_aligned_word(r4300, lsaddr, &value)) {
         *lsrtp = (value >> shift) & 0xff;
@@ -158,6 +160,7 @@ DECLARE_INSTRUCTION(LH)
     ADD_TO_PC(1);
     uint32_t value;
     unsigned int shift = hshift(lsaddr);
+    cdl_log_mem_read(lsaddr, PCADDR);
 
     if (r4300_read_aligned_word(r4300, lsaddr, &value)) {
         *lsrtp = SE16((value >> shift) & 0xffff);
@@ -172,6 +175,7 @@ DECLARE_INSTRUCTION(LHU)
     ADD_TO_PC(1);
     uint32_t value;
     unsigned int shift = hshift(lsaddr);
+    cdl_log_mem_read(lsaddr, PCADDR);
 
     if (r4300_read_aligned_word(r4300, lsaddr, &value)) {
         *lsrtp = (value >> shift) & 0xffff;
@@ -185,6 +189,7 @@ DECLARE_INSTRUCTION(LL)
     int64_t *lsrtp = &irt;
     ADD_TO_PC(1);
     uint32_t value;
+    cdl_log_mem_read(lsaddr, PCADDR);
 
     if (r4300_read_aligned_word(r4300, lsaddr, &value)) {
         *lsrtp = SE32(value);
@@ -199,6 +204,7 @@ DECLARE_INSTRUCTION(LW)
     int64_t *lsrtp = &irt;
     ADD_TO_PC(1);
     uint32_t value;
+    cdl_log_mem_read(lsaddr, PCADDR);
 
     if (r4300_read_aligned_word(r4300, lsaddr, &value)) {
         *lsrtp = SE32(value);
@@ -213,6 +219,7 @@ DECLARE_INSTRUCTION(LWU)
     ADD_TO_PC(1);
 
     uint32_t value;
+    cdl_log_mem_read(lsaddr, PCADDR);
 
     if (r4300_read_aligned_word(r4300, lsaddr, &value)) {
         *lsrtp = value;
@@ -230,6 +237,7 @@ DECLARE_INSTRUCTION(LWL)
     unsigned int shift = 8 * n;
     uint32_t mask = BITS_BELOW_MASK32(8 * n);
     uint32_t value;
+    cdl_log_mem_read(lsaddr, PCADDR);
 
     if (r4300_read_aligned_word(r4300, lsaddr, &value)) {
         *lsrtp = SE32(((uint32_t)*lsrtp & mask) | ((uint32_t)value << shift));
@@ -249,6 +257,7 @@ DECLARE_INSTRUCTION(LWR)
         ? UINT32_C(0)
         : BITS_ABOVE_MASK32(8 * (n + 1));
     uint32_t value;
+    cdl_log_mem_read(lsaddr, PCADDR);
 
     if (r4300_read_aligned_word(r4300, lsaddr, &value)) {
         *lsrtp = SE32(((uint32_t)*lsrtp & mask) | ((uint32_t)value >> shift));
@@ -261,6 +270,7 @@ DECLARE_INSTRUCTION(LD)
     const uint32_t lsaddr = (uint32_t) irs32 + (uint32_t) iimmediate;
     int64_t *lsrtp = &irt;
     ADD_TO_PC(1);
+    cdl_log_mem_read(lsaddr, PCADDR);
 
     r4300_read_aligned_dword(r4300, lsaddr, (uint64_t*)lsrtp);
 }
@@ -276,6 +286,7 @@ DECLARE_INSTRUCTION(LDL)
     unsigned int shift = 8 * n;
     uint64_t mask = BITS_BELOW_MASK64(8 * n);
     uint64_t value;
+    cdl_log_mem_read(lsaddr, PCADDR);
 
     if (r4300_read_aligned_dword(r4300, lsaddr & ~UINT32_C(7), &value)) {
         *lsrtp = ((uint64_t)*lsrtp & mask) | (value << shift);
@@ -295,6 +306,7 @@ DECLARE_INSTRUCTION(LDR)
         ? UINT64_C(0)
         : BITS_ABOVE_MASK64(8 * (n + 1));
     uint64_t value;
+    cdl_log_mem_read(lsaddr, PCADDR);
 
     if (r4300_read_aligned_dword(r4300, lsaddr & ~UINT32_C(7), &value)) {
         *lsrtp = ((uint64_t)*lsrtp & mask) | (value >> shift);
@@ -310,6 +322,7 @@ DECLARE_INSTRUCTION(SB)
     int64_t *lsrtp = &irt;
     ADD_TO_PC(1);
     unsigned int shift = bshift(lsaddr);
+    cdl_log_mem_write(lsaddr, PCADDR);
 
     r4300_write_aligned_word(r4300, lsaddr, (uint32_t)*lsrtp << shift, UINT32_C(0xff) << shift);
 }
@@ -321,6 +334,7 @@ DECLARE_INSTRUCTION(SH)
     int64_t *lsrtp = &irt;
     ADD_TO_PC(1);
     unsigned int shift = hshift(lsaddr);
+    cdl_log_mem_write(lsaddr, PCADDR);
 
     r4300_write_aligned_word(r4300, lsaddr, (uint32_t)*lsrtp << shift, UINT32_C(0xffff) << shift);
 }
@@ -334,6 +348,7 @@ DECLARE_INSTRUCTION(SC)
 
     if (r4300->llbit)
     {
+        cdl_log_mem_write(lsaddr, PCADDR);
         if (r4300_write_aligned_word(r4300, lsaddr, (uint32_t)*lsrtp, ~UINT32_C(0))) {
             r4300->llbit = 0;
             *lsrtp = 1;
@@ -351,7 +366,7 @@ DECLARE_INSTRUCTION(SW)
     const uint32_t lsaddr = (uint32_t) irs32 + (uint32_t) iimmediate;
     int64_t *lsrtp = &irt;
     ADD_TO_PC(1);
-
+    cdl_log_mem_write(lsaddr, PCADDR);
     r4300_write_aligned_word(r4300, lsaddr, (uint32_t)*lsrtp, ~UINT32_C(0));
 }
 
@@ -368,7 +383,7 @@ DECLARE_INSTRUCTION(SWL)
         ? ~UINT32_C(0)
         : BITS_BELOW_MASK32(8 * (4 - n));
     uint32_t value = (uint32_t)*lsrtp;
-
+    cdl_log_mem_write(lsaddr & ~UINT32_C(0x3), PCADDR);
     r4300_write_aligned_word(r4300, lsaddr & ~UINT32_C(0x3), value >> shift, mask);
 }
 
@@ -383,7 +398,7 @@ DECLARE_INSTRUCTION(SWR)
     unsigned int shift = 8 * (3 - n);
     uint32_t mask = BITS_ABOVE_MASK32(8 * (3 - n));
     uint32_t value = (uint32_t)*lsrtp;
-
+    cdl_log_mem_write(lsaddr & ~UINT32_C(0x3), PCADDR);
     r4300_write_aligned_word(r4300, lsaddr & ~UINT32_C(0x3), value << shift, mask);
 }
 
@@ -393,7 +408,7 @@ DECLARE_INSTRUCTION(SD)
     const uint32_t lsaddr = (uint32_t) irs32 + (uint32_t) iimmediate;
     int64_t *lsrtp = &irt;
     ADD_TO_PC(1);
-
+    cdl_log_mem_write(lsaddr, PCADDR);
     r4300_write_aligned_dword(r4300, lsaddr, (uint64_t)*lsrtp, ~UINT64_C(0));
 }
 
@@ -410,7 +425,7 @@ DECLARE_INSTRUCTION(SDL)
         ? ~UINT64_C(0)
         : BITS_BELOW_MASK64(8 * (8 - n));
     uint64_t value = (uint64_t)*lsrtp;
-
+    cdl_log_mem_write(lsaddr & ~UINT32_C(0x7), PCADDR);
     r4300_write_aligned_dword(r4300, lsaddr & ~UINT32_C(0x7), value >> shift, mask);
 }
 
@@ -425,7 +440,7 @@ DECLARE_INSTRUCTION(SDR)
     unsigned int shift = 8 * (7 - n);
     uint64_t mask = BITS_ABOVE_MASK64(8 * (7 - n));
     uint64_t value = (uint64_t)*lsrtp;
-
+    cdl_log_mem_write(lsaddr & ~UINT32_C(0x7), PCADDR);
     r4300_write_aligned_dword(r4300, lsaddr & ~UINT32_C(0x7), value << shift, mask);
 }
 
@@ -893,9 +908,10 @@ DECLARE_INSTRUCTION(MTLO)
 
 DECLARE_JUMP(J,   (jinst_index<<2) | ((PCADDR+4) & UINT32_C(0xF0000000)), 1, &r4300_regs(r4300)[0],  0, 0)
 DECLARE_JUMP_ALWAYS(JAL, (jinst_index<<2) | ((PCADDR+4) & UINT32_C(0xF0000000)), 1, &r4300_regs(r4300)[31], 0, 0)
-
+/* presumably &r4300_regs(r4300)[31] is $ra */
 DECLARE_JUMP_RETURN(JR,   irs32, 1, &r4300_regs(r4300)[0], 0, 0)
-DECLARE_JUMP_ALWAYS(JALR, irs32, 1, &rrd,    0, 0)
+DECLARE_JUMP_ALWAYS(JALR, irs32, 1, &rrd,    0, 0) 
+/*The same as the jr instruction, except that the return address is loaded into a specified register (or $ra if not specified)*/
 
 DECLARE_JUMP(BEQ,     PCADDR + (iimmediate+1)*4, irs == irt, &r4300_regs(r4300)[0], 0, 0)
 DECLARE_JUMP(BEQL,    PCADDR + (iimmediate+1)*4, irs == irt, &r4300_regs(r4300)[0], 1, 0)

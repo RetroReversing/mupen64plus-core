@@ -15,10 +15,14 @@ unsigned int hex_to_int(string str);
 extern "C" {
 void printBytes(uint8_t* mem, uint32_t cartAddr, uint32_t length);
 void printWords(uint8_t* mem, uint32_t cartAddr, uint32_t length);
+double jaro_winkler_distance(const char *s, const char *a);
 }
+void printf_endian_swap(const char* data);
+string string_endian_swap(const char* data);
 string alphabetic_only_name(char* mem, int length);
 string get_header_ascii(uint8_t* mem, uint32_t proper_cart_address);
 string printBytesToStr(uint8_t* mem, uint32_t length) ;
+string printWordsToStr(uint8_t* mem, uint32_t length);
 void save_dram_rw_to_json();
 
 #define Swap4Bytes(val) \
@@ -63,9 +67,16 @@ struct cdl_labels {
     uint32_t return_offset_from_start;
     string function_bytes;
     string function_bytes_endian;
-    std::map<string, string> addresses;
+    std::map<uint32_t, string> function_calls;
+    std::map<string, string> read_addresses;
+    std::map<string, string> write_addresses;
+    std::map<string, string> printfs;
+    std::map<int32_t, string> notes;
     bool isRenamed;
     bool doNotLog;
+    bool many_memory_writes;
+    bool many_memory_reads;
+    bool generatedSignature;
 };
 struct cdl_jump_return {
     string func_offset;

@@ -230,6 +230,7 @@ void write_rdram_regs(void* opaque, uint32_t address, uint32_t value, uint32_t m
 
 void read_rdram_dram(void* opaque, uint32_t address, uint32_t* value)
 {
+    cdl_common_log_tag("_readRdramDram");
     // cdl_log_rdram_read(address);
     struct rdram* rdram = (struct rdram*)opaque;
     uint32_t addr = rdram_dram_address(address);
@@ -239,7 +240,7 @@ void read_rdram_dram(void* opaque, uint32_t address, uint32_t* value)
 
 void write_rdram_dram(void* opaque, uint32_t address, uint32_t value, uint32_t mask)
 {
-    // cdl_log_rdram_write(address, value, mask);
+    cdl_common_log_tag("_writeRdramDram");
     struct rdram* rdram = (struct rdram*)opaque;
     uint32_t addr = rdram_dram_address(address);
 

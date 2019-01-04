@@ -94,9 +94,10 @@ static void dma_sp_read(struct rsp_core* sp)
         dramaddr+=skip;
     }
 }
-
+void cdl_log_update_sp_status();
 static void update_sp_status(struct rsp_core* sp, uint32_t w)
 {
+    cdl_log_update_sp_status();
     /* clear / set halt */
     if (w & 0x1) sp->regs[SP_STATUS_REG] &= ~SP_STATUS_HALT;
     if (w & 0x2) sp->regs[SP_STATUS_REG] |= SP_STATUS_HALT;
@@ -191,6 +192,7 @@ void read_rsp_mem(void* opaque, uint32_t address, uint32_t* value)
 {
     struct rsp_core* sp = (struct rsp_core*)opaque;
     uint32_t addr = rsp_mem_address(address);
+    printf("read_rsp_mem %#08x \n", addr);
 
     *value = sp->mem[addr];
 }
@@ -199,15 +201,18 @@ void write_rsp_mem(void* opaque, uint32_t address, uint32_t value, uint32_t mask
 {
     struct rsp_core* sp = (struct rsp_core*)opaque;
     uint32_t addr = rsp_mem_address(address);
+    printf("write_rsp_mem %#08x \n", addr);
 
     masked_write(&sp->mem[addr], value, mask);
 }
 
-
+void cdl_log_read_rsp_regs();
+void cdl_log_write_rsp_regs();
 void read_rsp_regs(void* opaque, uint32_t address, uint32_t* value)
 {
     struct rsp_core* sp = (struct rsp_core*)opaque;
     uint32_t reg = rsp_reg(address);
+    cdl_log_read_rsp_regs();
 
     *value = sp->regs[reg];
 
@@ -221,6 +226,7 @@ void write_rsp_regs(void* opaque, uint32_t address, uint32_t value, uint32_t mas
 {
     struct rsp_core* sp = (struct rsp_core*)opaque;
     uint32_t reg = rsp_reg(address);
+    cdl_log_write_rsp_regs();
 
     switch(reg)
     {
@@ -247,17 +253,19 @@ void write_rsp_regs(void* opaque, uint32_t address, uint32_t value, uint32_t mas
     }
 }
 
-
+void cdl_log_read_rsp_regs2();
+void cdl_log_write_rsp_regs2();
 void read_rsp_regs2(void* opaque, uint32_t address, uint32_t* value)
 {
+    cdl_log_read_rsp_regs2();
     struct rsp_core* sp = (struct rsp_core*)opaque;
     uint32_t reg = rsp_reg2(address);
 
     *value = sp->regs2[reg];
 }
-
 void write_rsp_regs2(void* opaque, uint32_t address, uint32_t value, uint32_t mask)
 {
+    cdl_log_write_rsp_regs2();
     struct rsp_core* sp = (struct rsp_core*)opaque;
     uint32_t reg = rsp_reg2(address);
 

@@ -33,8 +33,14 @@ void to_json(json& j, const cdl_labels& p) {
         {"function_bytes", p.function_bytes},
         {"stack_trace", p.stack_trace},
         {"function_bytes_endian", p.function_bytes_endian},
-        {"addresses", p.addresses},
+        {"read_addresses", p.read_addresses},
+        {"write_addresses", p.write_addresses},
         {"isRenamed", p.isRenamed},
+        {"many_memory_reads", p.many_memory_reads},
+        {"many_memory_writes", p.many_memory_writes},
+        {"function_calls", p.function_calls},
+        {"printfs", p.printfs},
+        {"notes", p.notes},
     };
 }
 void from_json(const json& j, cdl_labels& p) {
@@ -46,8 +52,13 @@ void from_json(const json& j, cdl_labels& p) {
     j.at("function_bytes").get_to(p.function_bytes);
     j.at("stack_trace").get_to(p.stack_trace);
     j.at("function_bytes_endian").get_to(p.function_bytes_endian);
-    j.at("addresses").get_to(p.addresses);
+    j.at("read_addresses").get_to(p.read_addresses);
+    j.at("write_addresses").get_to(p.write_addresses);
     j.at("isRenamed").get_to(p.isRenamed);
+    j.at("many_memory_reads").get_to(p.many_memory_reads);
+    j.at("many_memory_writes").get_to(p.many_memory_writes);
+    j.at("function_calls").get_to(p.function_calls);
+    //j.at("notes").get_to(p.notes);
 }
 
 void to_json(json& j, const cdl_dram_cart_map& p) {
@@ -66,6 +77,29 @@ void from_json(const json& j, cdl_tlb& p) {
     j.at("start").get_to(p.start);
     j.at("end").get_to(p.end);
     j.at("rom_offset").get_to(p.rom_offset);
+}
+
+uint32_t convert_endianness(uint32_t value) {
+    return __builtin_bswap32(value);
+}
+
+void printf_endian_swap(const char* data) {
+    printf("%s",string_endian_swap(data).c_str());
+}
+
+string string_endian_swap(const char* data) {
+    std::stringstream ss;
+    const uint32_t *i = (uint32_t*)data;
+    while (i != NULL)
+    {
+        //const char*)convert_endianness(*i);
+        const char* chars = (const char*)i;
+        ss << chars[3] << chars[2] << chars[1] << chars[0];
+        if (chars[0] == '\0' || chars[1] == '\0' || chars[2] == '\0' || chars[3] == '\0') break;
+        i++;
+    }
+    return ss.str();
+
 }
 
 uint32_t hex_to_int(string str) {
@@ -112,6 +146,17 @@ string printBytesToStr(uint8_t* mem, uint32_t length=0x18) {
     //sstream << std::hex << std::setfill ('0') << std::setw(sizeof(T)*2);
     for (int i=0; i<=length; i++) {
         sstream << n2hexstr((uint8_t)mem[i], 2);
+    }
+    return sstream.str();
+}
+string printWordsToStr(uint8_t* mem, uint32_t length=0x18) {
+    std::stringstream sstream;
+    //sstream << std::hex << std::setfill ('0') << std::setw(sizeof(T)*2);
+    for (int i=0; i<=length; i++) {
+        sstream << n2hexstr((uint8_t)mem[i], 2);
+        if ((i+1)%4 == 0) {
+            sstream << " ";
+        }
     }
     return sstream.str();
 }

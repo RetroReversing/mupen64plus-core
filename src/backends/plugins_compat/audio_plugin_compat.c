@@ -52,11 +52,12 @@ static void audio_plugin_push_samples(void* aout, const void* buffer, size_t siz
     struct ai_controller* ai = (struct ai_controller*)aout;
     uint32_t saved_ai_length = ai->regs[AI_LEN_REG];
     uint32_t saved_ai_dram = ai->regs[AI_DRAM_ADDR_REG];
-    cdl_log_audio_sample(saved_ai_dram,saved_ai_length);
+    // printf("audio_plugin_push_samples\n");
 
     /* exploit the fact that buffer points in g_dev.rdram.dram to retreive dram_addr_reg value */
     ai->regs[AI_DRAM_ADDR_REG] = (uint32_t)((uint8_t*)buffer - (uint8_t*)ai->ri->rdram->dram);
     ai->regs[AI_LEN_REG] = (uint32_t)size;
+    cdl_log_audio_sample(ai->regs[AI_DRAM_ADDR_REG],ai->regs[AI_LEN_REG]);
 
     audio.aiLenChanged();
 

@@ -207,7 +207,7 @@ void apply_mem_mapping(struct memory* mem, const struct mem_mapping* mapping)
     size_t i;
     uint16_t begin = mapping->begin >> 16;
     uint16_t end   = mapping->end   >> 16;
-    printf("apply_mem_mapping begin:%#008x end:%#008x \n", mapping->begin , mapping->end);
+    // printf("apply_mem_mapping begin:%#008x end:%#008x \n", mapping->begin , mapping->end);
 
     for (i = begin; i <= end; ++i) {
         map_region(mem, i, mapping->type, &mapping->handler);

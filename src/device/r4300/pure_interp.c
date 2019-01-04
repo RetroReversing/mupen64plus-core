@@ -39,7 +39,7 @@
 
 static void InterpretOpcode(struct r4300_core* r4300);
 
-int cdl_log_jump(int take_jump, uint32_t jump_target);
+//int cdl_log_jump(int take_jump, uint32_t jump_target);
 
 #define DECLARE_R4300
 #define PCADDR r4300->interp_PC.addr
@@ -51,7 +51,7 @@ int cdl_log_jump(int take_jump, uint32_t jump_target);
       int take_jump = (condition); \
       const uint32_t jump_target = (destination); \
       int64_t *link_register = (link); \
-	  take_jump = cdl_log_jump(take_jump, jump_target); \
+	  take_jump = cdl_log_jump(take_jump, jump_target, *r4300_pc(r4300)); \
       if (cop1 && check_cop1_unusable(r4300)) return; \
       if (link_register != &r4300_regs(r4300)[0]) \
       { \
@@ -116,7 +116,7 @@ int cdl_log_jump(int take_jump, uint32_t jump_target);
 			jump_target = cdl_get_alternative_jump(jump_target); \
 			r4300->interp_PC.addr = jump_target; \
 			uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300));\
-			cdl_log_jump_always(take_jump, jump_target, op_address); \
+			cdl_log_jump_always(take_jump, jump_target, op_address, r4300_regs(r4300)[31], *r4300_pc(r4300)); \
         } \
       } \
       else \
@@ -148,7 +148,6 @@ int cdl_log_jump(int take_jump, uint32_t jump_target);
       int take_jump = (condition); \
       const uint32_t jump_target = (destination); \
       int64_t *link_register = (link); \
-	  cdl_log_jump_return(take_jump, jump_target, *r4300_pc(r4300)); \
       if (cop1 && check_cop1_unusable(r4300)) return; \
       if (link_register != &r4300_regs(r4300)[0]) \
       { \
@@ -163,6 +162,7 @@ int cdl_log_jump(int take_jump, uint32_t jump_target);
         r4300->delay_slot=0; \
         if (take_jump && !r4300->skip_jump) \
         { \
+		cdl_log_jump_return(take_jump, jump_target, *r4300_pc(r4300), r4300_regs(r4300)); \
           r4300->interp_PC.addr = jump_target; \
         } \
       } \
@@ -273,16 +273,16 @@ void InterpretOpcode(struct r4300_core* r4300)
 	uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300));
 	// printf("op_address: %#08x *r4300_pc(r4300): %#08x r4300_pc(r4300):%#08x ",op_address, *r4300_pc(r4300), r4300_pc(r4300));
 	cdl_log_opcode(program_counter, op_address);
-	if (largest == -1 && smallest == -1) {
-		largest = program_counter;
-		smallest = program_counter;
-	}
-	if (program_counter > largest) {
-		largest = program_counter;
-		// printf("InterpretOpcode largestPC:%u smallestPC:%u \n", largest, smallest);
-		unsigned char* bytes = ((uint8_t*) op_address);
-		// printf("\nBytes: %x %x %x %x ",bytes[3], bytes[2], bytes[1], bytes[0]);
-	}
+	// if (largest == -1 && smallest == -1) {
+	// 	largest = program_counter;
+	// 	smallest = program_counter;
+	// }
+	// if (program_counter > largest) {
+	// 	largest = program_counter;
+	// 	// printf("InterpretOpcode largestPC:%u smallestPC:%u \n", largest, smallest);
+	// 	unsigned char* bytes = ((uint8_t*) op_address);
+	// 	// printf("\nBytes: %x %x %x %x ",bytes[3], bytes[2], bytes[1], bytes[0]);
+	// }
 	if (op_address == NULL)
 		return;
 	uint32_t op = *op_address;

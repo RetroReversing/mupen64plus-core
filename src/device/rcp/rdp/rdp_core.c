@@ -85,14 +85,17 @@ void read_dpc_regs(void* opaque, uint32_t address, uint32_t* value)
 {
     struct rdp_core* dp = (struct rdp_core*)opaque;
     uint32_t reg = dpc_reg(address);
+    cdl_common_log_tag("readDPCRegs");
 
     *value = dp->dpc_regs[reg];
 }
 
+void cdl_log_dpc_reg_write(uint32_t address, uint32_t value, uint32_t mask);
 void write_dpc_regs(void* opaque, uint32_t address, uint32_t value, uint32_t mask)
 {
     struct rdp_core* dp = (struct rdp_core*)opaque;
     uint32_t reg = dpc_reg(address);
+    cdl_log_dpc_reg_write(address, value, mask);
 
     switch(reg)
     {
@@ -125,6 +128,7 @@ void write_dpc_regs(void* opaque, uint32_t address, uint32_t value, uint32_t mas
 
 void read_dps_regs(void* opaque, uint32_t address, uint32_t* value)
 {
+    printf("read_dps_regs \n");
     struct rdp_core* dp = (struct rdp_core*)opaque;
     uint32_t reg = dps_reg(address);
 
@@ -133,6 +137,7 @@ void read_dps_regs(void* opaque, uint32_t address, uint32_t* value)
 
 void write_dps_regs(void* opaque, uint32_t address, uint32_t value, uint32_t mask)
 {
+    printf("read_dps_regs \n");
     struct rdp_core* dp = (struct rdp_core*)opaque;
     uint32_t reg = dps_reg(address);
 
