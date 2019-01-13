@@ -44,6 +44,8 @@
 #include "osal/dynamiclib.h"
 #include "plugin.h"
 
+void cdl_log_rsp(uint32_t log_type, uint32_t address, const char * extra_data);
+void cdl_log_ostask(uint32_t type, uint32_t flags, uint32_t bootcode, uint32_t bootSize, uint32_t ucode, uint32_t ucodeSize, uint32_t ucodeData, uint32_t ucodeDataSize);
 CONTROL Controls[4];
 
 /* global function pointers - initialized on core startup */
@@ -280,6 +282,8 @@ static m64p_error plugin_start_gfx(void)
     gfx_info.SP_STATUS_REG = &g_dev.sp.regs[SP_STATUS_REG];
     gfx_info.RDRAM_SIZE = (unsigned int*) &g_dev.rdram.dram_size;
 
+    gfx_info.cdl_log_rsp = cdl_log_rsp;
+
     /* call the audio plugin */
     if (!gfx.initiateGFX(gfx_info))
         return M64ERR_PLUGIN_FAIL;
@@ -487,7 +491,6 @@ static m64p_error plugin_connect_rsp(m64p_dynlib_handle plugin_handle)
     return M64ERR_SUCCESS;
 }
 
-void cdl_log_rsp(uint32_t log_type, uint32_t address, const char * extra_data);
 
 static m64p_error plugin_start_rsp(void)
 {
@@ -519,6 +522,7 @@ static m64p_error plugin_start_rsp(void)
     rsp_info.ProcessRdpList = gfx.processRDPList;
     rsp_info.ShowCFB = gfx.showCFB;
     rsp_info.cdl_log_rsp = cdl_log_rsp;
+    rsp_info.cdl_log_ostask = cdl_log_ostask;
 
     /* call the RSP plugin  */
     rsp.initiateRSP(rsp_info, NULL);

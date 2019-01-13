@@ -123,6 +123,7 @@ void to_json(json& j, const cdl_dma& p) {
         {"ascii_header", p.ascii_header},
         {"func_addr", p.func_addr},
         {"guess_type", p.guess_type},
+        {"known_name", p.known_name},
         };
     }
 
@@ -139,6 +140,7 @@ void from_json(const json& j, cdl_dma& p) {
     j.at("ascii_header").get_to(p.ascii_header);
     j.at("func_addr").get_to(p.func_addr);
     j.at("guess_type").get_to(p.guess_type);
+    j.at("known_name").get_to(p.known_name);
 }
 
 string printBytesToStr(uint8_t* mem, uint32_t length=0x18) {

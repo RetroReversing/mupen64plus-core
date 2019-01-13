@@ -192,7 +192,8 @@ void read_rsp_mem(void* opaque, uint32_t address, uint32_t* value)
 {
     struct rsp_core* sp = (struct rsp_core*)opaque;
     uint32_t addr = rsp_mem_address(address);
-    printf("read_rsp_mem %#08x \n", addr);
+    cdl_common_log_tag("readRSPMem");
+
 
     *value = sp->mem[addr];
 }
@@ -201,7 +202,7 @@ void write_rsp_mem(void* opaque, uint32_t address, uint32_t value, uint32_t mask
 {
     struct rsp_core* sp = (struct rsp_core*)opaque;
     uint32_t addr = rsp_mem_address(address);
-    printf("write_rsp_mem %#08x \n", addr);
+    cdl_common_log_tag("writeRSPMem");
 
     masked_write(&sp->mem[addr], value, mask);
 }

@@ -24,6 +24,7 @@ string get_header_ascii(uint8_t* mem, uint32_t proper_cart_address);
 string printBytesToStr(uint8_t* mem, uint32_t length) ;
 string printWordsToStr(uint8_t* mem, uint32_t length);
 void save_dram_rw_to_json();
+void readJsonToObject(string filename, json& json_object);
 
 #define Swap4Bytes(val) \
  ( (((val) >> 24) & 0x000000FF) | (((val) >>  8) & 0x0000FF00) | \
@@ -53,6 +54,7 @@ struct cdl_dma {
     bool is_assembly;
     string ascii_header;
     string guess_type;
+    string known_name;
 };
 struct cdl_dram_cart_map {
     string dram_offset;

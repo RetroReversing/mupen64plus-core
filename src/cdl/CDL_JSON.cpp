@@ -14,6 +14,7 @@ using namespace std;
 
 
 json fileConfig;
+json reConfig;
 
 std::map<uint32_t,uint32_t> rsp_reads;
 std::map<uint32_t,uint32_t> rdram_reads;
@@ -29,6 +30,13 @@ std::map<uint32_t, cdl_jump_return> jump_returns;
 std::map<string, string> function_signatures;
 std::map<uint32_t,uint8_t> cached_jumps;
 std::map<uint32_t,string> memory_to_log;
+
+void readJsonToObject(string filename, json& json_object) {
+    std::ifstream i(filename);
+    if (i.good()) {
+        i >> json_object;
+    }
+}
 
 void save_dram_rw_to_json() {
     // Note if you save it here you might want to also update readJsonFromFile()

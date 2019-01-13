@@ -15,6 +15,7 @@ using namespace std;
 #include "CDL.hpp"
 
 extern json fileConfig;
+extern json reConfig;
 json libultra_signatures;
 json linker_map_file;
 #define USE_CDL 1;
@@ -66,6 +67,8 @@ bool should_change_jumps = false;
 int frame_last_reversed = 0;
 int time_last_reversed = 0;
 string game_name = "";
+string ucode_crc = "";
+
 // string next_dma_type = "";
 // uint32_t previous_function = 0;
  std::vector<uint32_t> function_stack = std::vector<uint32_t>();
@@ -82,18 +85,21 @@ extern std::map<uint32_t,cdl_tlb> tlbs;
 extern std::map<uint32_t,cdl_dma> dmas;
 std::map<uint32_t, std::map<string, string> > addresses;
 
+uint32_t rspboot = 0;
+
 #define NUMBER_OF_MANY_READS 40
 #define NUMBER_OF_MANY_WRITES 40
 
 // 
 // # Toggles
 // 
-#define support_n64_prints 1
-#define start_fresh_every_time 1
-bool cdl_log_memory = true;
-bool tag_functions = true;
-bool log_notes = true;
-bool log_function_calls = true;
+bool support_n64_prints = false;
+bool cdl_log_memory = false;
+bool tag_functions = false;
+bool log_notes = false;
+bool log_function_calls = false;
+bool log_ostasks = false;
+bool log_rsp = false;
 
 void cdl_keyevents(int keysym, int keymod) {
     #ifndef USE_CDL
@@ -147,29 +153,29 @@ void saveLibUltraSignatures() {
     o << libultra_signatures.dump(1) << std::endl;
 }
 
-
-void readLinkerMapFile() {
-    std::ifstream i("symbols.json"); //"mario.json"
-    if (i.good()) {
-        i >> linker_map_file;
-    } else {
-        cout << "Unable to read Linker map file\n";
-    }
+void setTogglesBasedOnConfig() {
+    cdl_log_memory = reConfig["shouldLogMemory"];
+    tag_functions = reConfig["shouldTagFunctions"];
+    log_notes = reConfig["shouldLogNotes"];
+    log_function_calls = reConfig["shouldLogFunctionCalls"];
+    support_n64_prints = reConfig["shouldSupportN64Prints"];
+    log_ostasks = reConfig["shouldLogOsTasks"];
+    log_rsp = reConfig["shouldLogRsp"];
 }
 
 void readJsonFromFile() {
     readLibUltraSignatures();
-    readLinkerMapFile();
+    readJsonToObject("symbols.json", linker_map_file);
+    readJsonToObject("./reconfig.json", reConfig);
+    setTogglesBasedOnConfig();
     string filename = "./configs/";
     filename+=ROM_PARAMS.headername;
     filename += ".json";
     // read a JSON file
-    std::ifstream i(filename);
-#ifndef start_fresh_every_time
-    if (i.good()) {
-        i >> fileConfig;
-}
-    #endif
+    if (!reConfig["startFreshEveryTime"]) {
+        cout << "Reading previous game config file \n";
+        readJsonToObject(filename, fileConfig);
+    }
     if (fileConfig.find("jumps") == fileConfig.end()) {
                 fileConfig["jumps"] = R"([])"_json;
     }
@@ -321,7 +327,10 @@ string create_n64_split_regions(cdl_dma d) { //uint8_t* header_bytes, uint32_t p
     header << " header: " <<  ascii_header << " 0x" << std::hex << header_bytes; // (header_bytes[3]+0) << (header_bytes[2]+0) << (header_bytes[1]+0) << (header_bytes[0]+0);
     sstream << "  - [0x" << std::hex << d.rom_start << ", 0x"<< (d.rom_start+d.length);
     sstream << ", \"" << region_type << "\",   ";
-    if (strcmp(d.guess_type.c_str(), "audio") == 0) {
+    if (d.known_name.length()>1) {
+        sstream << "\"" << d.known_name;
+    }
+    else if (strcmp(d.guess_type.c_str(), "audio") == 0) {
         sstream << "\"" << d.guess_type << "_" << d.rom_start << "_len_"<< d.length;
     } else {
         sstream << "\"_" << ascii_header << "_" << "_" << d.rom_start << "_len_"<< d.length;
@@ -366,7 +375,6 @@ void log_dma_write(uint8_t* mem, uint32_t proper_cart_address, uint32_t cart_add
     // }
 
     dmas[proper_cart_address] = t;
-    string stack = print_function_stack_trace();
 
     // std::cout << "DMA: Dram:0x" << std::hex << t.dram_start << "->0x" << t.dram_end << " Length:0x" << t.length << " " << t.ascii_header << " Stack:" << function_stack.size() << " " << t.func_addr << " last:"<< function_stack.back() << "\n";
     
@@ -525,9 +533,10 @@ void write_rom_mapping() {
     file << "name: \"";
     file << ROM_SETTINGS.goodname;
     file << "\"\n";
-    file <<"# checksums from ROM header offsets 0x10 and 0x14\n";
-    file <<"# used for auto configuration detection\n";
-    file <<"checksum1: 0x";
+    file << "# Graphics uCodeCRC: \"" << ucode_crc << "\"\n";
+    file << "# checksums from ROM header offsets 0x10 and 0x14\n";
+    file << "# used for auto configuration detection\n";
+    file << "checksum1: 0x";
     file << std::hex << ROM_HEADER.CRC1;
     file <<"\nchecksum2: 0x";
     file << std::hex << ROM_HEADER.CRC2;
@@ -539,14 +548,11 @@ void write_rom_mapping() {
     file <<"  # start,  end,      type,     label\n";
     file <<"  - [0x000000, 0x000040, \"header\", \"header\"]\n";
     file <<"  - [0x000040, 0x000B70, \"asm\",    \"boot\"]\n";
-    file <<"  - [0x000B70, 0x001000, \"bin\",    \"bootcode_font\"]\n";
-    
+    file <<"  - [0x000B70, 0x001000, \"bin\",    \"bootcode_font\"]\n";    
 
     //
     // Write out 
     //
-    //for(map<int, char*>::iterator it = mapOfInstructions.begin(); it != mapOfInstructions.end(); ++it) {
-    // for (json::iterator it = fileConfig["mappings"].begin(); it != fileConfig["mappings"].end(); ++it) {
     for (auto& it : dmas) {
         auto t = it.second;
         if (it.first ==0 || t.dram_start == 0) continue;
@@ -631,7 +637,6 @@ void cdl_log_jump_always(int take_jump, uint32_t jump_target, uint8_t* jump_targ
     if (labels.find(jump_target) != labels.end() ) 
         return;
     log_function_call(jump_target);
-    cout << "about to add note\n";
     auto t = cdl_labels();
     string jump_target_str = n2hexstr(jump_target);
     t.func_offset = jump_target_str;
@@ -684,14 +689,14 @@ void cdl_log_jump_return(int take_jump, uint32_t jump_target, uint32_t pc, uint3
     previous_ra.pop_back();
 
 
-#ifdef support_n64_prints
+if (support_n64_prints) {
     if (strcmp(labels[previous_function_backup].func_name.c_str(),"osSyncPrintf") ==0) {
         uint32_t* memory = fast_mem_access(r4300, registers[REGISTER_A2]);
         string swapped = string_endian_swap((const char*)memory);
         labels[function_stack.back()].printfs[swapped] = "";
         printf("\n%s > %s",labels[function_stack.back()].func_name.c_str(), swapped.c_str());
     }
-#endif
+}
 
     if (jumps[jump_target] >3) return;
     jumps[jump_target] = 0x04;
@@ -748,7 +753,7 @@ void cdl_log_jump_return(int take_jump, uint32_t jump_target, uint32_t pc, uint3
             return;
         }
         if (libultra_signatures["game_signatures"].find(word_pattern) != libultra_signatures["game_signatures"].end()) {
-            std::cout << "In game_signatures:" <<  word_pattern << " name:"<< libultra_signatures["game_signatures"][word_pattern] << "\n";
+            // std::cout << "In game_signatures:" <<  word_pattern << " name:"<< libultra_signatures["game_signatures"][word_pattern] << "\n";
             labels[previous_function_backup].func_name = libultra_signatures["game_signatures"][word_pattern];
             // return since we have already named this functions, don't need its signature to be saved
             return;
@@ -1224,13 +1229,85 @@ void cdl_log_memory_mappings(mem_mapping* mappings, uint32_t number_of_mappings)
     }
 }
 
+#define OSTASK_GFX 1
+#define OSTASK_AUDIO 2
+
+void cdl_log_ostask(uint32_t type, uint32_t flags, uint32_t bootcode, uint32_t bootSize, uint32_t ucode, uint32_t ucodeSize, uint32_t ucodeData, uint32_t ucodeDataSize) {
+    if (!log_ostasks) return;
+    if (rspboot == 0) {
+        rspboot = map_assembly_offset_to_rom_offset(bootcode,0);
+        auto bootDma = cdl_dma();
+        bootDma.dram_start=rspboot;
+        bootDma.dram_end = rspboot+bootSize;
+        bootDma.rom_start = rspboot;
+        bootDma.rom_end = rspboot+bootSize;
+        bootDma.length = bootSize;
+        bootDma.frame = l_CurrentFrame;
+        bootDma.func_addr = print_function_stack_trace(); 
+        bootDma.known_name = "rsp.boot";
+        dmas[rspboot] = bootDma;
+    }
+    uint32_t ucodeRom = map_assembly_offset_to_rom_offset(ucode,0);
+
+    if (dmas.find(ucodeRom) != dmas.end() ) 
+        return;
+    printf("OSTask type:%#08x flags:%#08x bootcode:%#08x ucode:%#08x ucodeSize:%#08x ucodeData:%#08x ucodeDataSize:%#08x \n", type, flags, bootcode, ucode, ucodeSize, ucodeData, ucodeDataSize);
+    uint32_t ucodeDataRom = map_assembly_offset_to_rom_offset(ucodeData,0);
+
+    auto data = cdl_dma();
+    data.dram_start=ucodeData;
+    data.dram_end = ucodeData+ucodeDataSize;
+    data.rom_start = ucodeDataRom;
+    data.rom_end = ucodeDataRom+ucodeDataSize;
+    data.length = ucodeDataSize;
+    data.frame = l_CurrentFrame;
+    data.func_addr = print_function_stack_trace(); 
+    data.is_assembly = false;
+
+    auto t = cdl_dma();
+    t.dram_start=ucode;
+    t.dram_end = ucode+ucodeSize;
+    t.rom_start = ucodeRom;
+    t.rom_end = ucodeRom+ucodeSize;
+    t.length = ucodeSize;
+    t.frame = l_CurrentFrame;
+    t.func_addr = print_function_stack_trace(); 
+    t.is_assembly = false;
+
+
+    if (type == OSTASK_AUDIO) {
+        t.guess_type = "rsp.audio";
+        t.ascii_header = "rsp.audio";
+        t.known_name = "rsp.audio";
+        data.ascii_header = "rsp.audio.data";
+        data.known_name = "rsp.audio.data";
+    } else if (type == OSTASK_GFX) {
+        t.guess_type = "rsp.graphics";
+        t.ascii_header = "rsp.graphics";
+        t.known_name = "rsp.graphics";
+        data.ascii_header = "rsp.graphics.data";
+        data.known_name = "rsp.graphics.data";
+    } else {
+        printf("other type:%#08x  ucode:%#08x \n",type, ucodeRom);
+    }
+    dmas[ucodeRom] = t;
+    dmas[ucodeDataRom] = data;
+}
+
+
 #define CDL_ALIST 0
+#define CDL_UCODE_CRC 2
 void cdl_log_rsp(uint32_t log_type, uint32_t address, const char * extra_data) {
+    if (!log_rsp) return;
     if (log_type == CDL_ALIST) {
         if (audio_address.find(address) != audio_address.end() ) 
             return;
         audio_address[address] = n2hexstr(address)+extra_data;
         // cout << "Alist address:" << std::hex << address << " " << extra_data << "\n";
+        return;
+    }
+    if (log_type == CDL_UCODE_CRC) {
+        ucode_crc = n2hexstr(address);
         return;
     }
     cout << "Log rsp\n";
