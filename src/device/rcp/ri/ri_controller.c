@@ -25,6 +25,7 @@
 
 #include "device/memory/memory.h"
 
+// RDRAM Interface
 void init_ri(struct ri_controller* ri, struct rdram* rdram)
 {
     ri->rdram = rdram;
@@ -38,6 +39,7 @@ void poweron_ri(struct ri_controller* ri)
 
 void read_ri_regs(void* opaque, uint32_t address, uint32_t* value)
 {
+    cdl_common_log_tag("readRiRegs");
     struct ri_controller* ri = (struct ri_controller*)opaque;
     uint32_t reg = ri_reg(address);
 
@@ -46,6 +48,7 @@ void read_ri_regs(void* opaque, uint32_t address, uint32_t* value)
 
 void write_ri_regs(void* opaque, uint32_t address, uint32_t value, uint32_t mask)
 {
+    cdl_common_log_tag("writeRiRegs");
     struct ri_controller* ri = (struct ri_controller*)opaque;
     uint32_t reg = ri_reg(address);
 

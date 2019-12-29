@@ -44,6 +44,8 @@ void init_sram(struct sram* sram,
 
 unsigned int sram_dma_read(void* opaque, const uint8_t* dram, uint32_t dram_addr, uint32_t cart_addr, uint32_t length)
 {
+    printf("sram_dma_read cart_addr: %u\n", cart_addr);
+
     size_t i;
     struct sram* sram = (struct sram*)opaque;
     uint8_t* mem = sram->istorage->data(sram->storage);
@@ -61,6 +63,7 @@ unsigned int sram_dma_read(void* opaque, const uint8_t* dram, uint32_t dram_addr
 
 unsigned int sram_dma_write(void* opaque, uint8_t* dram, uint32_t dram_addr, uint32_t cart_addr, uint32_t length)
 {
+    printf("sram_dma_write cart_addr: %u\n", cart_addr);
     size_t i;
     struct sram* sram = (struct sram*)opaque;
     const uint8_t* mem = sram->istorage->data(sram->storage);
@@ -76,6 +79,7 @@ unsigned int sram_dma_write(void* opaque, uint8_t* dram, uint32_t dram_addr, uin
 
 void read_sram(void* opaque, uint32_t address, uint32_t* value)
 {
+    printf("read_sram: %u\n", address);
     struct sram* sram = (struct sram*)opaque;
     const uint8_t* mem = sram->istorage->data(sram->storage);
 
@@ -86,6 +90,7 @@ void read_sram(void* opaque, uint32_t address, uint32_t* value)
 
 void write_sram(void* opaque, uint32_t address, uint32_t value, uint32_t mask)
 {
+    printf("write_sra:m %u\n", address);
     struct sram* sram = (struct sram*)opaque;
     uint8_t* mem = sram->istorage->data(sram->storage);
 

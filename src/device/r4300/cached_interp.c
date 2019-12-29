@@ -77,6 +77,8 @@ void cached_interp_##name(void) \
         r4300->delay_slot=0; \
         if (take_jump && !r4300->skip_jump) \
         { \
+            uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300)); \
+            cdl_log_jump(take_jump, jump_target, op_address, *r4300_pc(r4300), r4300_regs(r4300)[31]); \
             (*r4300_pc_struct(r4300))=r4300->cached_interp.actual->block+((jump_target-r4300->cached_interp.actual->start)>>2); \
         } \
     } \
@@ -102,6 +104,190 @@ void cached_interp_##name##_OUT(void) \
     } \
     if (!likely || take_jump) \
     { \
+        (*r4300_pc_struct(r4300))++; \
+        r4300->delay_slot=1; \
+        UPDATE_DEBUGGER(); \
+        (*r4300_pc_struct(r4300))->ops(); \
+        cp0_update_count(r4300); \
+        r4300->delay_slot=0; \
+        if (take_jump && !r4300->skip_jump) \
+        { \
+            uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300)); \
+            cdl_log_jump(take_jump, jump_target, op_address, *r4300_pc(r4300), r4300_regs(r4300)[31]); \
+            generic_jump_to(r4300, jump_target); \
+        } \
+    } \
+    else \
+    { \
+        (*r4300_pc_struct(r4300)) += 2; \
+        cp0_update_count(r4300); \
+    } \
+    r4300->cp0.last_addr = *r4300_pc(r4300); \
+    if (*r4300_cp0_next_interrupt(&r4300->cp0) <= r4300_cp0_regs(&r4300->cp0)[CP0_COUNT_REG]) gen_interrupt(r4300); \
+} \
+  \
+void cached_interp_##name##_IDLE(void) \
+{ \
+    DECLARE_R4300 \
+    uint32_t* cp0_regs = r4300_cp0_regs(&r4300->cp0); \
+    const int take_jump = (condition); \
+    int skip; \
+    if (cop1 && check_cop1_unusable(r4300)) return; \
+    if (take_jump) \
+    { \
+        cp0_update_count(r4300); \
+        skip = *r4300_cp0_next_interrupt(&r4300->cp0) - cp0_regs[CP0_COUNT_REG]; \
+        if (skip > 3) cp0_regs[CP0_COUNT_REG] += (skip & UINT32_C(0xFFFFFFFC)); \
+        else cached_interp_##name(); \
+    } \
+    else cached_interp_##name(); \
+}
+#define DECLARE_JUMP_ALWAYS(name, destination, condition, link, likely, cop1) \
+void cached_interp_##name(void) \
+{ \
+    DECLARE_R4300 \
+    const int take_jump = (condition); \
+    uint32_t jump_target = (destination); \
+    int64_t *link_register = (link); \
+    if (cop1 && check_cop1_unusable(r4300)) return; \
+    if (link_register != &r4300_regs(r4300)[0]) \
+    { \
+    /* update the return register if its not already the pc?*/ \
+        *link_register = SE32(*r4300_pc(r4300) + 8); \
+    } \
+    if (!likely || take_jump) \
+    { \
+        (*r4300_pc_struct(r4300))++; \
+        r4300->delay_slot=1; \
+        UPDATE_DEBUGGER(); \
+        (*r4300_pc_struct(r4300))->ops(); \
+        cp0_update_count(r4300); \
+        r4300->delay_slot=0; \
+        if (take_jump && !r4300->skip_jump) \
+        { \
+            jump_target = cdl_get_alternative_jump(jump_target); \
+            (*r4300_pc_struct(r4300))=r4300->cached_interp.actual->block+((jump_target-r4300->cached_interp.actual->start)>>2); \
+            uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300)); \
+            cdl_log_jump_always(take_jump, jump_target, op_address, r4300_regs(r4300)[31], *r4300_pc(r4300)); \
+        } \
+    } \
+    else \
+    { \
+        (*r4300_pc_struct(r4300)) += 2; \
+        cp0_update_count(r4300); \
+    } \
+    r4300->cp0.last_addr = *r4300_pc(r4300); \
+    if (*r4300_cp0_next_interrupt(&r4300->cp0) <= r4300_cp0_regs(&r4300->cp0)[CP0_COUNT_REG]) gen_interrupt(r4300); \
+} \
+ \
+void cached_interp_##name##_OUT(void) \
+{ \
+    DECLARE_R4300 \
+    const int take_jump = (condition); \
+    uint32_t jump_target = (destination); \
+    int64_t *link_register = (link); \
+    if (cop1 && check_cop1_unusable(r4300)) return; \
+    if (link_register != &r4300_regs(r4300)[0]) \
+    { \
+        *link_register = SE32(*r4300_pc(r4300) + 8); \
+    } \
+    if (!likely || take_jump) \
+    { \
+        (*r4300_pc_struct(r4300))++; \
+        r4300->delay_slot=1; \
+        UPDATE_DEBUGGER(); \
+        (*r4300_pc_struct(r4300))->ops(); \
+        cp0_update_count(r4300); \
+        r4300->delay_slot=0; \
+        if (take_jump && !r4300->skip_jump) \
+        { \
+            jump_target = cdl_get_alternative_jump(jump_target); \
+            generic_jump_to(r4300, jump_target); \
+            uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300)); \
+            cdl_log_jump_always(take_jump, jump_target, op_address, r4300_regs(r4300)[31], *r4300_pc(r4300)); \
+        } \
+    } \
+    else \
+    { \
+        (*r4300_pc_struct(r4300)) += 2; \
+        cp0_update_count(r4300); \
+    } \
+    r4300->cp0.last_addr = *r4300_pc(r4300); \
+    if (*r4300_cp0_next_interrupt(&r4300->cp0) <= r4300_cp0_regs(&r4300->cp0)[CP0_COUNT_REG]) gen_interrupt(r4300); \
+} \
+  \
+void cached_interp_##name##_IDLE(void) \
+{ \
+    DECLARE_R4300 \
+    uint32_t* cp0_regs = r4300_cp0_regs(&r4300->cp0); \
+    const int take_jump = (condition); \
+    int skip; \
+    if (cop1 && check_cop1_unusable(r4300)) return; \
+    if (take_jump) \
+    { \
+        cp0_update_count(r4300); \
+        skip = *r4300_cp0_next_interrupt(&r4300->cp0) - cp0_regs[CP0_COUNT_REG]; \
+        if (skip > 3) cp0_regs[CP0_COUNT_REG] += (skip & UINT32_C(0xFFFFFFFC)); \
+        else cached_interp_##name(); \
+    } \
+    else cached_interp_##name(); \
+}
+// This is actually Jump REGISTER but often used for return when passing $ra
+#define DECLARE_JUMP_RETURN(name, destination, condition, link, likely, cop1) \
+void cached_interp_##name(void) \
+{ \
+    DECLARE_R4300 \
+    const int take_jump = (condition); \
+    const uint32_t jump_target = (destination); \
+    int64_t *link_register = (link); \
+    if (cop1 && check_cop1_unusable(r4300)) return; \
+    if (link_register != &r4300_regs(r4300)[0]) \
+    { \
+        *link_register = SE32(*r4300_pc(r4300) + 8); \
+    } \
+    if (!likely || take_jump) \
+    { \
+    if (destination != r4300_regs(r4300)[31]) {\
+    /*printf("Jump target is not $ra\n");*/\
+    } else { \
+        cdl_log_jump_return(take_jump, jump_target, *r4300_pc(r4300), r4300_regs(r4300)[31], r4300_regs(r4300), r4300);}\
+        (*r4300_pc_struct(r4300))++; \
+        r4300->delay_slot=1; \
+        UPDATE_DEBUGGER(); \
+        (*r4300_pc_struct(r4300))->ops(); \
+        cp0_update_count(r4300); \
+        r4300->delay_slot=0; \
+        if (take_jump && !r4300->skip_jump) \
+        { \
+            (*r4300_pc_struct(r4300))=r4300->cached_interp.actual->block+((jump_target-r4300->cached_interp.actual->start)>>2); \
+        } \
+    } \
+    else \
+    { \
+        (*r4300_pc_struct(r4300)) += 2; \
+        cp0_update_count(r4300); \
+    } \
+    r4300->cp0.last_addr = *r4300_pc(r4300); \
+    if (*r4300_cp0_next_interrupt(&r4300->cp0) <= r4300_cp0_regs(&r4300->cp0)[CP0_COUNT_REG]) gen_interrupt(r4300); \
+} \
+ \
+void cached_interp_##name##_OUT(void) \
+{ \
+    DECLARE_R4300 \
+    const int take_jump = (condition); \
+    const uint32_t jump_target = (destination); \
+    int64_t *link_register = (link); \
+    if (cop1 && check_cop1_unusable(r4300)) return; \
+    if (link_register != &r4300_regs(r4300)[0]) \
+    { \
+        *link_register = SE32(*r4300_pc(r4300) + 8); \
+    } \
+    if (!likely || take_jump) \
+    { \
+    if (destination != r4300_regs(r4300)[31]) {\
+    /*printf("Jump target is not $ra\n");*/\
+    } else { \
+        cdl_log_jump_return(take_jump, jump_target, *r4300_pc(r4300), r4300_regs(r4300)[31], r4300_regs(r4300), r4300);} \
         (*r4300_pc_struct(r4300))++; \
         r4300->delay_slot=1; \
         UPDATE_DEBUGGER(); \
@@ -157,7 +343,7 @@ void cached_interp_##name##_IDLE(void) \
 #define cfft (*r4300_pc_struct(r4300))->f.cf.ft
 #define cffs (*r4300_pc_struct(r4300))->f.cf.fs
 #define cffd (*r4300_pc_struct(r4300))->f.cf.fd
-
+// .f = field?
 /* 32 bits macros */
 #ifndef M64P_BIG_ENDIAN
 #define rrt32 *((int32_t*) (*r4300_pc_struct(r4300))->f.r.rt)
@@ -183,6 +369,7 @@ void cached_interp_FIN_BLOCK(void)
     DECLARE_R4300
     if (!r4300->delay_slot)
     {
+        // printf("generic_jump_to? %#08x\n", ((*r4300_pc_struct(r4300))-1)->addr+4);
         generic_jump_to(r4300, ((*r4300_pc_struct(r4300))-1)->addr+4);
 /*
 #ifdef DBG
@@ -209,6 +396,8 @@ Used by dynarec only, check should be unnecessary
             (*r4300_pc_struct(r4300))->ops();
             r4300->cached_interp.actual = blk;
             (*r4300_pc_struct(r4300)) = inst+1;
+            // uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300));
+			// cdl_log_jump_cached(1, ((*r4300_pc_struct(r4300))-1)->addr+4, op_address);
         }
         else
             (*r4300_pc_struct(r4300))->ops();
@@ -219,9 +408,9 @@ void cached_interp_NOTCOMPILED(void)
 {
     DECLARE_R4300
     uint32_t *mem = fast_mem_access(r4300, r4300->cached_interp.blocks[*r4300_pc(r4300)>>12]->start);
-#ifdef DBG
-    DebugMessage(M64MSG_INFO, "NOTCOMPILED: addr = %x ops = %lx", *r4300_pc(r4300), (long) (*r4300_pc_struct(r4300))->ops);
-#endif
+// #ifdef DBG
+//     DebugMessage(M64MSG_INFO, "NOTCOMPILED: addr = %x ops = %lx", *r4300_pc(r4300), (long) (*r4300_pc_struct(r4300))->ops);
+// #endif
 
     if (mem == NULL) {
         DebugMessage(M64MSG_ERROR, "not compiled exception");
@@ -690,6 +879,9 @@ enum r4300_opcode r4300_decode(struct precomp_instr* inst, struct r4300_core* r4
 
     /* set appropriate handler */
     inst->ops = ci_table[opcode];
+    int program_counter = (*r4300_pc(r4300));
+	uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300));
+    cdl_log_opcode(program_counter, op_address);
 
     /* propagate opcode info to allow further processing */
     return opcode;
@@ -765,9 +957,9 @@ void cached_interp_init_block(struct r4300_core* r4300, uint32_t address)
 
     length = get_block_length(b);
 
-#ifdef DBG
-    DebugMessage(M64MSG_INFO, "init block %" PRIX32 " - %" PRIX32, b->start, b->end);
-#endif
+// #ifdef DBG
+//     DebugMessage(M64MSG_INFO, "init block %" PRIX32 " - %" PRIX32, b->start, b->end);
+// #endif
 
     /* allocate block instructions */
     if (!b->block)
@@ -891,9 +1083,9 @@ void cached_interp_recompile_block(struct r4300_core* r4300, const uint32_t* iw,
         }
     }
 
-#ifdef DBG
-    DebugMessage(M64MSG_INFO, "block recompiled (%" PRIX32 "-%" PRIX32 ")", func, block->start+i*4);
-#endif
+// #ifdef DBG
+//     DebugMessage(M64MSG_INFO, "block recompiled (%" PRIX32 "-%" PRIX32 ")", func, block->start+i*4);
+// #endif
 }
 
 void cached_interpreter_jump_to(struct r4300_core* r4300, uint32_t address)

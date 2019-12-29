@@ -1,5 +1,7 @@
 /projects/unix/_obj*/
 /projects/unix/libmupen64plus*.so*
+src/asm_defines/
+*.dylib
 projects/unix/libmupen64plus.dylib
 src/asm_defines/asm_defines_gas.h
 projects/.DS_Store

@@ -114,7 +114,7 @@ m64p_media_loader g_media_loader;
 int g_gs_vi_counter = 0;
 
 /** static (local) variables **/
-static int   l_CurrentFrame = 0;         // frame counter
+int   l_CurrentFrame = 0;         // frame counter
 static int   l_TakeScreenshot = 0;       // Tell OSD Rendering callback to take a screenshot just before drawing the OSD
 static int   l_SpeedFactor = 100;        // percentage of nominal game speed at which emulator is running
 static int   l_FrameAdvance = 0;         // variable to check if we pause on next frame
@@ -1334,7 +1334,7 @@ m64p_error main_run(void)
 #if !defined(M64P_BIG_ENDIAN)
     if (g_RomWordsLittleEndian == 0)
     {
-        swap_buffer((uint8_t*)mem_base_u32(g_mem_base, MM_CART_ROM), 4, g_rom_size/4);
+        swap_buffer((uint8_t*)mem_base_u32(g_mem_base, MM_CART_ROM, 1), 4, g_rom_size/4);
         g_RomWordsLittleEndian = 1;
     }
 #endif
@@ -1392,7 +1392,7 @@ m64p_error main_run(void)
     const struct storage_backend_interface* dd_idisk = NULL;
     memset(&dd_disk, 0, sizeof(dd_disk));
 
-    load_dd_rom((uint8_t*)mem_base_u32(g_mem_base, MM_DD_ROM), &dd_rom_size);
+    load_dd_rom((uint8_t*)mem_base_u32(g_mem_base, MM_DD_ROM, 1), &dd_rom_size);
     if (dd_rom_size > 0) {
         dd_rtc_iclock = &g_iclock_ctime_plus_delta;
         load_dd_disk(&dd_disk, &dd_idisk);

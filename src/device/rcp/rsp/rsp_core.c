@@ -35,6 +35,8 @@
 #endif
 #include "plugin/plugin.h"
 
+void cdl_log_dma_sp_write(uint32_t spmemaddr, uint32_t dramaddr, uint32_t length, unsigned char *dram );
+
 static void dma_sp_write(struct rsp_core* sp)
 {
     unsigned int i,j;
@@ -50,6 +52,7 @@ static void dma_sp_write(struct rsp_core* sp)
 
     unsigned char *spmem = (unsigned char*)sp->mem + (sp->regs[SP_MEM_ADDR_REG] & 0x1000);
     unsigned char *dram = (unsigned char*)sp->ri->rdram->dram;
+    cdl_log_dma_sp_write(sp->regs[SP_MEM_ADDR_REG] , sp->regs[SP_DRAM_ADDR_REG], length, dram);
 
     for(j=0; j<count; j++) {
         pre_framebuffer_read(&sp->dp->fb, dramaddr);
@@ -79,6 +82,7 @@ static void dma_sp_read(struct rsp_core* sp)
     unsigned char *spmem = (unsigned char*)sp->mem + (sp->regs[SP_MEM_ADDR_REG] & 0x1000);
     unsigned char *dram = (unsigned char*)sp->ri->rdram->dram;
 
+    printf("dma_sp_read memaddr:%#08x dramaddr:%#08x \n", sp->regs[SP_MEM_ADDR_REG], sp->regs[SP_DRAM_ADDR_REG]);
     for(j=0; j<count; j++) {
         for(i=0; i<length; i++) {
             dram[dramaddr^S8] = spmem[memaddr^S8];
@@ -90,9 +94,10 @@ static void dma_sp_read(struct rsp_core* sp)
         dramaddr+=skip;
     }
 }
-
+void cdl_log_update_sp_status();
 static void update_sp_status(struct rsp_core* sp, uint32_t w)
 {
+    cdl_log_update_sp_status();
     /* clear / set halt */
     if (w & 0x1) sp->regs[SP_STATUS_REG] &= ~SP_STATUS_HALT;
     if (w & 0x2) sp->regs[SP_STATUS_REG] |= SP_STATUS_HALT;
@@ -187,6 +192,8 @@ void read_rsp_mem(void* opaque, uint32_t address, uint32_t* value)
 {
     struct rsp_core* sp = (struct rsp_core*)opaque;
     uint32_t addr = rsp_mem_address(address);
+    cdl_common_log_tag("readRSPMem");
+
 
     *value = sp->mem[addr];
 }
@@ -195,15 +202,18 @@ void write_rsp_mem(void* opaque, uint32_t address, uint32_t value, uint32_t mask
 {
     struct rsp_core* sp = (struct rsp_core*)opaque;
     uint32_t addr = rsp_mem_address(address);
+    cdl_common_log_tag("writeRSPMem");
 
     masked_write(&sp->mem[addr], value, mask);
 }
 
-
+void cdl_log_read_rsp_regs();
+void cdl_log_write_rsp_regs();
 void read_rsp_regs(void* opaque, uint32_t address, uint32_t* value)
 {
     struct rsp_core* sp = (struct rsp_core*)opaque;
     uint32_t reg = rsp_reg(address);
+    cdl_log_read_rsp_regs();
 
     *value = sp->regs[reg];
 
@@ -217,6 +227,7 @@ void write_rsp_regs(void* opaque, uint32_t address, uint32_t value, uint32_t mas
 {
     struct rsp_core* sp = (struct rsp_core*)opaque;
     uint32_t reg = rsp_reg(address);
+    cdl_log_write_rsp_regs();
 
     switch(reg)
     {
@@ -243,17 +254,19 @@ void write_rsp_regs(void* opaque, uint32_t address, uint32_t value, uint32_t mas
     }
 }
 
-
+void cdl_log_read_rsp_regs2();
+void cdl_log_write_rsp_regs2();
 void read_rsp_regs2(void* opaque, uint32_t address, uint32_t* value)
 {
+    cdl_log_read_rsp_regs2();
     struct rsp_core* sp = (struct rsp_core*)opaque;
     uint32_t reg = rsp_reg2(address);
 
     *value = sp->regs2[reg];
 }
-
 void write_rsp_regs2(void* opaque, uint32_t address, uint32_t value, uint32_t mask)
 {
+    cdl_log_write_rsp_regs2();
     struct rsp_core* sp = (struct rsp_core*)opaque;
     uint32_t reg = rsp_reg2(address);
 

@@ -63,6 +63,12 @@ void tlb_unmap(struct tlb* tlb, size_t entry)
     }
 }
 
+
+void log_tlb_entry(const struct tlb_entry* e, size_t entry);
+
+// The Translation Lookaside Buffer has 32 entries
+// entry is which of the 32 entries we want
+// you have to set the tlb->entries[entry] to a valid tlb_entry before calling
 void tlb_map(struct tlb* tlb, size_t entry)
 {
     unsigned int i;
@@ -70,6 +76,7 @@ void tlb_map(struct tlb* tlb, size_t entry)
 
     assert(entry < 32);
     e = &tlb->entries[entry];
+    log_tlb_entry(e, entry);
 
     if (e->v_even)
     {
@@ -77,8 +84,11 @@ void tlb_map(struct tlb* tlb, size_t entry)
             !(e->start_even >= 0x80000000 && e->end_even < 0xC0000000) &&
             e->phys_even < 0x20000000)
         {
-            for (i=e->start_even;i<e->end_even;i+=0x1000)
+            for (i=e->start_even;i<e->end_even;i+=0x1000) {
                 tlb->LUT_r[i>>12] = UINT32_C(0x80000000) | (e->phys_even + (i - e->start_even) + 0xFFF);
+                // printf("Even phys_even:%#08x start_even:%#08x (i - e->start_even):%#08x (e->phys_even + (i - e->start_even) + 0xFFF):%#08x tlb->LUT_r[i>>12]:%#08x \n",e->phys_even, e->start_even, (i - e->start_even), (e->phys_even + (i - e->start_even) + 0xFFF), tlb->LUT_r[i>>12]);
+            }
+            // does d_even mean you can write to it?
             if (e->d_even)
                 for (i=e->start_even;i<e->end_even;i+=0x1000)
                     tlb->LUT_w[i>>12] = UINT32_C(0x80000000) | (e->phys_even + (i - e->start_even) + 0xFFF);
@@ -100,9 +110,11 @@ void tlb_map(struct tlb* tlb, size_t entry)
     }
 }
 
+// W is whether it is a Write or Read
 uint32_t virtual_to_physical_address(struct r4300_core* r4300, uint32_t address, int w)
 {
     const struct tlb* tlb = &r4300->cp0.tlb;
+    // shift bits to right: e.g address:0x20ab28 -> addr:0x00020a
     unsigned int addr = address >> 12;
 
 #ifdef NEW_DYNAREC
@@ -127,17 +139,23 @@ uint32_t virtual_to_physical_address(struct r4300_core* r4300, uint32_t address,
     }
 #endif
 
+    // w changes whether to do LUT_w and LUT_r
     if (w == 1)
     {
+        // printf("Write to physical address? address:%#08x addr:%#08x \n", address, addr); mario golf
+        //  Write
         if (tlb->LUT_w[addr])
             return (tlb->LUT_w[addr] & UINT32_C(0xFFFFF000)) | (address & UINT32_C(0xFFF));
     }
     else
     {
-        if (tlb->LUT_r[addr])
+        // Read
+        if (tlb->LUT_r[addr]) {
             return (tlb->LUT_r[addr] & UINT32_C(0xFFFFF000)) | (address & UINT32_C(0xFFF));
+        }
     }
-    //printf("tlb exception !!! @ %x, %x, add:%x\n", address, w, r4300->pc->addr);
+    // printf("virtual_to_physical_address read address:%#08x addr:%#08x result:%#08x firstpart:%#08x second:%#08x arrayVal:%#08x\n", address, addr, (tlb->LUT_r[addr] & UINT32_C(0xFFFFF000)) | (address & UINT32_C(0xFFF)), (tlb->LUT_r[addr] & UINT32_C(0xFFFFF000)), (address & UINT32_C(0xFFF)), tlb->LUT_r[addr]);
+    // printf("tlb exception !!! @ %x, %x, add:%x\n", address, w, r4300->pc->addr);
     //getchar();
 
     TLB_refill_exception(r4300, address, w);

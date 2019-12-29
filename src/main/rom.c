@@ -149,14 +149,14 @@ m64p_error open_rom(const unsigned char* romimage, unsigned int size)
     g_RomWordsLittleEndian = 0;
     /* allocate new buffer for ROM and copy into this buffer */
     g_rom_size = size;
-    swap_copy_rom((uint8_t*)mem_base_u32(g_mem_base, MM_CART_ROM), romimage, size, &imagetype);
+    swap_copy_rom((uint8_t*)mem_base_u32(g_mem_base, MM_CART_ROM, 1), romimage, size, &imagetype);
     /* ROM is now in N64 native (big endian) byte order */
 
-    memcpy(&ROM_HEADER, (uint8_t*)mem_base_u32(g_mem_base, MM_CART_ROM), sizeof(m64p_rom_header));
+    memcpy(&ROM_HEADER, (uint8_t*)mem_base_u32(g_mem_base, MM_CART_ROM, 1), sizeof(m64p_rom_header));
 
     /* Calculate MD5 hash  */
     md5_init(&state);
-    md5_append(&state, (const md5_byte_t*)((uint8_t*)mem_base_u32(g_mem_base, MM_CART_ROM)), g_rom_size);
+    md5_append(&state, (const md5_byte_t*)((uint8_t*)mem_base_u32(g_mem_base, MM_CART_ROM, 1)), g_rom_size);
     md5_finish(&state, digest);
     for ( i = 0; i < 16; ++i )
         sprintf(buffer+i*2, "%02X", digest[i]);
@@ -232,10 +232,13 @@ m64p_error open_rom(const unsigned char* romimage, unsigned int size)
     return M64ERR_SUCCESS;
 }
 
+extern void write_rom_mapping();
+
 m64p_error close_rom(void)
 {
     /* Clear Byte-swapped flag, since ROM is now deleted. */
     g_RomWordsLittleEndian = 0;
+    write_rom_mapping();
     DebugMessage(M64MSG_STATUS, "Rom closed.");
 
     return M64ERR_SUCCESS;

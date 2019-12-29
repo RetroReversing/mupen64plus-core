@@ -69,6 +69,8 @@ typedef struct {
     void (*ProcessAlistList)(void);
     void (*ProcessRdpList)(void);
     void (*ShowCFB)(void);
+    void (*cdl_log_rsp)(uint32_t log_type, uint32_t address, const char * extra_data);
+    void (*cdl_log_ostask)(uint32_t type, uint32_t flags, uint32_t bootcode, uint32_t bootSize, uint32_t ucode, uint32_t ucodeSize, uint32_t ucodeData, uint32_t ucodeDataSize);
 } RSP_INFO;
 
 typedef struct {
@@ -117,6 +119,7 @@ typedef struct {
        This will allow the GFX plugin to unset these bits if it needs. */
     unsigned int * SP_STATUS_REG;
     const unsigned int * RDRAM_SIZE;
+    void (*cdl_log_rsp)(uint32_t log_type, uint32_t address, const char * extra_data);
 } GFX_INFO;
 
 typedef struct {
@@ -201,6 +204,7 @@ EXPORT void CALL MoveScreen(int x, int y);
 EXPORT void CALL ProcessDList(void);
 EXPORT void CALL ProcessRDPList(void);
 EXPORT void CALL ShowCFB(void);
+EXPORT void CALL cdl_log_rsp(uint32_t log_type, uint32_t address, const char * extra_data);
 EXPORT void CALL UpdateScreen(void);
 EXPORT void CALL ViStatusChanged(void);
 EXPORT void CALL ViWidthChanged(void);

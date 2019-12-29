@@ -44,6 +44,8 @@
 #include "osal/dynamiclib.h"
 #include "plugin.h"
 
+void cdl_log_rsp(uint32_t log_type, uint32_t address, const char * extra_data);
+void cdl_log_ostask(uint32_t type, uint32_t flags, uint32_t bootcode, uint32_t bootSize, uint32_t ucode, uint32_t ucodeSize, uint32_t ucodeData, uint32_t ucodeDataSize);
 CONTROL Controls[4];
 
 /* global function pointers - initialized on core startup */
@@ -177,6 +179,7 @@ static m64p_error plugin_connect_gfx(m64p_dynlib_handle plugin_handle)
             !GET_FUNC(ptr_RomClosed, gfx.romClosed, "RomClosed") ||
             !GET_FUNC(ptr_RomOpen, gfx.romOpen, "RomOpen") ||
             !GET_FUNC(ptr_ShowCFB, gfx.showCFB, "ShowCFB") ||
+            // !GET_FUNC(ptr_cdl_log_rsp, cdl_log_rsp, "cdl_log_rsp") ||
             !GET_FUNC(ptr_UpdateScreen, gfx.updateScreen, "UpdateScreen") ||
             !GET_FUNC(ptr_ViStatusChanged, gfx.viStatusChanged, "ViStatusChanged") ||
             !GET_FUNC(ptr_ViWidthChanged, gfx.viWidthChanged, "ViWidthChanged") ||
@@ -228,7 +231,7 @@ static m64p_error plugin_connect_gfx(m64p_dynlib_handle plugin_handle)
 
 static m64p_error plugin_start_gfx(void)
 {
-    uint8_t media = *((uint8_t*)mem_base_u32(g_mem_base, MM_CART_ROM) + (0x3b ^ S8));
+    uint8_t media = *((uint8_t*)mem_base_u32(g_mem_base, MM_CART_ROM, 1) + (0x3b ^ S8));
 
     /* Here we feed 64DD IPL ROM header to GFX plugin if 64DD is present.
      * We use g_media_loader.get_dd_rom to detect 64DD presence
@@ -246,10 +249,10 @@ static m64p_error plugin_start_gfx(void)
     free(dd_ipl_rom_filename);
 
     /* fill in the GFX_INFO data structure */
-    gfx_info.HEADER = (unsigned char *)mem_base_u32(g_mem_base, rom_base);
-    gfx_info.RDRAM = (unsigned char *)mem_base_u32(g_mem_base, MM_RDRAM_DRAM);
-    gfx_info.DMEM = (unsigned char *)mem_base_u32(g_mem_base, MM_RSP_MEM);
-    gfx_info.IMEM = (unsigned char *)mem_base_u32(g_mem_base, MM_RSP_MEM + 0x1000);
+    gfx_info.HEADER = (unsigned char *)mem_base_u32(g_mem_base, rom_base, 1);
+    gfx_info.RDRAM = (unsigned char *)mem_base_u32(g_mem_base, MM_RDRAM_DRAM, 1);
+    gfx_info.DMEM = (unsigned char *)mem_base_u32(g_mem_base, MM_RSP_MEM, 1);
+    gfx_info.IMEM = (unsigned char *)mem_base_u32(g_mem_base, MM_RSP_MEM + 0x1000, 1);
     gfx_info.MI_INTR_REG = &(g_dev.mi.regs[MI_INTR_REG]);
     gfx_info.DPC_START_REG = &(g_dev.dp.dpc_regs[DPC_START_REG]);
     gfx_info.DPC_END_REG = &(g_dev.dp.dpc_regs[DPC_END_REG]);
@@ -278,6 +281,8 @@ static m64p_error plugin_start_gfx(void)
     gfx_info.version = 2; //Version 2 added SP_STATUS_REG and RDRAM_SIZE
     gfx_info.SP_STATUS_REG = &g_dev.sp.regs[SP_STATUS_REG];
     gfx_info.RDRAM_SIZE = (unsigned int*) &g_dev.rdram.dram_size;
+
+    gfx_info.cdl_log_rsp = cdl_log_rsp;
 
     /* call the audio plugin */
     if (!gfx.initiateGFX(gfx_info))
@@ -343,9 +348,9 @@ static m64p_error plugin_connect_audio(m64p_dynlib_handle plugin_handle)
 static m64p_error plugin_start_audio(void)
 {
     /* fill in the AUDIO_INFO data structure */
-    audio_info.RDRAM = (unsigned char *)mem_base_u32(g_mem_base, MM_RDRAM_DRAM);
-    audio_info.DMEM = (unsigned char *)mem_base_u32(g_mem_base, MM_RSP_MEM);
-    audio_info.IMEM = (unsigned char *)mem_base_u32(g_mem_base, MM_RSP_MEM + 0x1000);
+    audio_info.RDRAM = (unsigned char *)mem_base_u32(g_mem_base, MM_RDRAM_DRAM,1);
+    audio_info.DMEM = (unsigned char *)mem_base_u32(g_mem_base, MM_RSP_MEM,1);
+    audio_info.IMEM = (unsigned char *)mem_base_u32(g_mem_base, MM_RSP_MEM + 0x1000,1);
     audio_info.MI_INTR_REG = &(g_dev.mi.regs[MI_INTR_REG]);
     audio_info.AI_DRAM_ADDR_REG = &(g_dev.ai.regs[AI_DRAM_ADDR_REG]);
     audio_info.AI_LEN_REG = &(g_dev.ai.regs[AI_LEN_REG]);
@@ -486,12 +491,13 @@ static m64p_error plugin_connect_rsp(m64p_dynlib_handle plugin_handle)
     return M64ERR_SUCCESS;
 }
 
+
 static m64p_error plugin_start_rsp(void)
 {
     /* fill in the RSP_INFO data structure */
-    rsp_info.RDRAM = (unsigned char *)mem_base_u32(g_mem_base, MM_RDRAM_DRAM);
-    rsp_info.DMEM = (unsigned char *)mem_base_u32(g_mem_base, MM_RSP_MEM);
-    rsp_info.IMEM = (unsigned char *)mem_base_u32(g_mem_base, MM_RSP_MEM + 0x1000);
+    rsp_info.RDRAM = (unsigned char *)mem_base_u32(g_mem_base, MM_RDRAM_DRAM,1);
+    rsp_info.DMEM = (unsigned char *)mem_base_u32(g_mem_base, MM_RSP_MEM,1);
+    rsp_info.IMEM = (unsigned char *)mem_base_u32(g_mem_base, MM_RSP_MEM + 0x1000,1);
     rsp_info.MI_INTR_REG = &g_dev.mi.regs[MI_INTR_REG];
     rsp_info.SP_MEM_ADDR_REG = &g_dev.sp.regs[SP_MEM_ADDR_REG];
     rsp_info.SP_DRAM_ADDR_REG = &g_dev.sp.regs[SP_DRAM_ADDR_REG];
@@ -515,6 +521,8 @@ static m64p_error plugin_start_rsp(void)
     rsp_info.ProcessAlistList = audio.processAList;
     rsp_info.ProcessRdpList = gfx.processRDPList;
     rsp_info.ShowCFB = gfx.showCFB;
+    rsp_info.cdl_log_rsp = cdl_log_rsp;
+    rsp_info.cdl_log_ostask = cdl_log_ostask;
 
     /* call the RSP plugin  */
     rsp.initiateRSP(rsp_info, NULL);

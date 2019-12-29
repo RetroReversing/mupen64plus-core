@@ -72,6 +72,7 @@ static unsigned int get_dma_duration(struct ai_controller* ai)
 
 static void do_dma(struct ai_controller* ai, struct ai_dma* dma)
 {
+    cdl_log_audio_reg_access();
     /* lazy initialization of sample format */
     if (ai->samples_format_changed)
     {
@@ -97,6 +98,9 @@ static void do_dma(struct ai_controller* ai, struct ai_dma* dma)
     else
         ai->delayed_carry = 0;
 
+    //printf("audio do_dma address:%#08x length:%#08x duration:%#08x \n", dma->address, dma->length, dma->duration);
+
+
     /* schedule end of dma event */
     cp0_update_count(ai->mi->r4300);
     add_interrupt_event(&ai->mi->r4300->cp0, AI_INT, dma->duration);
@@ -112,6 +116,7 @@ static void fifo_push(struct ai_controller* ai)
         ai->fifo[1].length = ai->regs[AI_LEN_REG];
         ai->fifo[1].duration = duration;
         ai->regs[AI_STATUS_REG] |= AI_STATUS_FULL;
+        // printf("audio fifo_push 1 address:%#08x length:%#08x duration:%#08x \n", ai->fifo[1].address, ai->fifo[1].length, ai->fifo[1].duration);
     }
     else
     {
@@ -119,13 +124,17 @@ static void fifo_push(struct ai_controller* ai)
         ai->fifo[0].length = ai->regs[AI_LEN_REG];
         ai->fifo[0].duration = duration;
         ai->regs[AI_STATUS_REG] |= AI_STATUS_BUSY;
+        // printf("audio fifo_push address:%#08x length:%#08x duration:%#08x \n", ai->fifo[0].address, ai->fifo[0].length, ai->fifo[0].duration);
 
         do_dma(ai, &ai->fifo[0]);
     }
 }
 
+// first in first out (queue)
 static void fifo_pop(struct ai_controller* ai)
 {
+    // printf("fifo_pop address:%#08x length:%#08x duration:%#08x \n", ai->fifo[0].address, ai->fifo[0].length, ai->fifo[0].duration);
+
     if (ai->regs[AI_STATUS_REG] & AI_STATUS_FULL)
     {
         ai->fifo[0].address = ai->fifo[1].address;
@@ -159,6 +168,8 @@ void init_ai(struct ai_controller* ai,
 
 void poweron_ai(struct ai_controller* ai)
 {
+    printf("poweron_ai AI_REGS_COUNT:%#08x AI_DMA_FIFO_SIZE:%#08x \n", AI_REGS_COUNT, AI_DMA_FIFO_SIZE);
+
     memset(ai->regs, 0, AI_REGS_COUNT*sizeof(uint32_t));
     memset(ai->fifo, 0, AI_DMA_FIFO_SIZE*sizeof(struct ai_dma));
     ai->samples_format_changed = 0;
@@ -178,7 +189,9 @@ void read_ai_regs(void* opaque, uint32_t address, uint32_t* value)
         {
             unsigned int diff = ai->fifo[0].length - ai->last_read;
             unsigned char *p = (unsigned char*)&ai->ri->rdram->dram[ai->fifo[0].address/4];
+            // this is where the magic happens, if the following line is not here then no audio!
             ai->iaout->push_samples(ai->aout, p + diff, ai->last_read - *value);
+            // printf("push_samples last_read:%#08x \n", ai->last_read);
             ai->last_read = *value;
         }
     }
@@ -196,6 +209,8 @@ void write_ai_regs(void* opaque, uint32_t address, uint32_t value, uint32_t mask
     switch (reg)
     {
     case AI_LEN_REG:
+        // printf("witre AI_LEN_REG before:%#08x after:%#08x \n", ai->regs[AI_LEN_REG], value);
+
         masked_write(&ai->regs[AI_LEN_REG], value, mask);
         if (ai->regs[AI_LEN_REG] != 0) {
             fifo_push(ai);
@@ -217,19 +232,29 @@ void write_ai_regs(void* opaque, uint32_t address, uint32_t value, uint32_t mask
 
         masked_write(&ai->regs[reg], value, mask);
         return;
+    case AI_DRAM_ADDR_REG:
+        // printf("AI_DRAM_ADDR_REG %#08x mask: %#08x\n", value, mask);
+        masked_write(&ai->regs[reg], value, mask);
+        return;
     }
 
     masked_write(&ai->regs[reg], value, mask);
 }
-
+void printWords(uint8_t* mem, uint32_t cartAddr, uint32_t length);
 void ai_end_of_dma_event(void* opaque)
 {
     struct ai_controller* ai = (struct ai_controller*)opaque;
+    cdl_clear_dma_log();
+    cdl_finish_ai_dma(ai->fifo[0].address);
 
     if (ai->last_read != 0)
     {
         unsigned int diff = ai->fifo[0].length - ai->last_read;
         unsigned char *p = (unsigned char*)&ai->ri->rdram->dram[ai->fifo[0].address/4];
+        //printf("ai_end_of_dma_event %#08x size:%#08x \n", ai->fifo[0].address, ai->fifo[0].length);
+        //printWords((uint8_t*)p, 0, ai->fifo[0].length);
+        // AudioInfo.RDRAM + (*AudioInfo.AI_DRAM_ADDR_REG & 0xffffff)
+        
         ai->iaout->push_samples(ai->aout, p + diff, ai->last_read);
     }
 

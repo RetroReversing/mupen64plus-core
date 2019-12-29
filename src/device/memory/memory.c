@@ -207,6 +207,7 @@ void apply_mem_mapping(struct memory* mem, const struct mem_mapping* mapping)
     size_t i;
     uint16_t begin = mapping->begin >> 16;
     uint16_t end   = mapping->end   >> 16;
+    // printf("apply_mem_mapping begin:%#008x end:%#008x \n", mapping->begin , mapping->end);
 
     for (i = begin; i <= end; ++i) {
         map_region(mem, i, mapping->type, &mapping->handler);
@@ -235,8 +236,8 @@ void* init_mem_base(void)
     void* mem_base;
 
     /* First try the full mem base alloc */
-    mem_base = malloc(MB_MAX_SIZE_FULL);
-    if (mem_base == NULL) {
+    // mem_base = malloc(MB_MAX_SIZE_FULL);
+    // if (mem_base == NULL) {
         /* if it failed, try the compressed mem base alloc */
         mem_base = malloc(MB_MAX_SIZE);
         if (mem_base != NULL) {
@@ -245,12 +246,12 @@ void* init_mem_base(void)
             SET_MEM_BASE_MODE(mem_base);
             DebugMessage(M64MSG_INFO, "Using compressed mem base");
         }
-    }
-    else {
-        /* Full mem base mode has LSB = 0 */
-        assert(MEM_BASE_MODE(mem_base) == 0);
-        DebugMessage(M64MSG_INFO, "Using full mem base");
-    }
+    // }
+    // else {
+    //     /* Full mem base mode has LSB = 0 */
+    //     assert(MEM_BASE_MODE(mem_base) == 0);
+    //     DebugMessage(M64MSG_INFO, "Using full mem base");
+    // }
 
     return mem_base;
 }
@@ -260,38 +261,48 @@ void release_mem_base(void* mem_base)
     free(MEM_BASE_PTR(mem_base));
 }
 
-uint32_t* mem_base_u32(void* mem_base, uint32_t address)
+void cdl_log_rsp_mem(uint32_t address, uint32_t* mem, int isBootRom);
+void cdl_log_rdram(uint32_t address, uint32_t* mem,int isBootRom);
+void cdl_log_mm_cart_rom(uint32_t address,int isBootRom);
+void cdl_log_mm_cart_rom_pif(uint32_t address,int isBootRom);
+
+uint32_t* mem_base_u32(void* mem_base, uint32_t address, int isBootRom)
 {
     uint32_t* mem;
 
-    if (MEM_BASE_MODE(mem_base) == 0) {
-        /* In full mem base mode, use simple pointer arithmetic */
-        mem = (uint32_t*)((uint8_t*)mem_base + address);
-    }
-    else {
+    // if (MEM_BASE_MODE(mem_base) == 0) {
+    //     /* In full mem base mode, use simple pointer arithmetic */
+    //     mem = (uint32_t*)((uint8_t*)mem_base + address);
+    // }
+    // else {
         /* In compressed mem base mode, select appropriate mem_base offset */
         mem_base = MEM_BASE_PTR(mem_base);
 
         if (address < RDRAM_MAX_SIZE) {
             mem = (uint32_t*)((uint8_t*)mem_base + (address - MM_RDRAM_DRAM + MB_RDRAM_DRAM));
+            cdl_log_rdram(address,mem, isBootRom);
         }
         else if (address >= MM_CART_ROM) {
             if ((address & UINT32_C(0xfff00000)) == MM_PIF_MEM) {
                 mem = (uint32_t*)((uint8_t*)mem_base + (address - MM_PIF_MEM + MB_PIF_MEM));
+                cdl_log_mm_cart_rom_pif(address, isBootRom);
             } else {
                 mem = (uint32_t*)((uint8_t*)mem_base + (address - MM_CART_ROM + MB_CART_ROM));
+                cdl_log_mm_cart_rom(address, isBootRom);
             }
         }
         else if ((address & UINT32_C(0xfe000000)) ==  MM_DD_ROM) {
+            printf("MM_DD_ROM address:%#08x \n", address);
             mem = (uint32_t*)((uint8_t*)mem_base + (address - MM_DD_ROM + MB_DD_ROM));
         }
         else if ((address & UINT32_C(0xffffe000)) == MM_RSP_MEM) {
             mem = (uint32_t*)((uint8_t*)mem_base + (address - MM_RSP_MEM + MB_RSP_MEM));
+            cdl_log_rsp_mem(address, mem, isBootRom);
         }
         else {
             mem = NULL;
         }
-    }
+    // }
 
     return mem;
 }

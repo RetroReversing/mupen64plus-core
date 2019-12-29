@@ -77,6 +77,7 @@ void poweron_vi(struct vi_controller* vi)
 
 void read_vi_regs(void* opaque, uint32_t address, uint32_t* value)
 {
+    cdl_common_log_tag("_readViRegs");
     struct vi_controller* vi = (struct vi_controller*)opaque;
     uint32_t reg = vi_reg(address);
     const uint32_t* cp0_regs = r4300_cp0_regs(&vi->mi->r4300->cp0);
@@ -102,6 +103,7 @@ void read_vi_regs(void* opaque, uint32_t address, uint32_t* value)
 
 void write_vi_regs(void* opaque, uint32_t address, uint32_t value, uint32_t mask)
 {
+    cdl_common_log_tag("_writeViRegs");
     struct vi_controller* vi = (struct vi_controller*)opaque;
     uint32_t reg = vi_reg(address);
 
@@ -153,6 +155,7 @@ void write_vi_regs(void* opaque, uint32_t address, uint32_t value, uint32_t mask
 
 void vi_vertical_interrupt_event(void* opaque)
 {
+    cdl_common_log_tag("_vertInterrupt");
     struct vi_controller* vi = (struct vi_controller*)opaque;
     if (vi->dp->do_on_unfreeze & DELAY_DP_INT)
         vi->dp->do_on_unfreeze |= DELAY_UPDATESCREEN;

@@ -118,12 +118,14 @@ void poweron_fb(struct fb* fb)
 void read_rdram_fb(void* opaque, uint32_t address, uint32_t* value)
 {
     struct fb* fb = (struct fb*)opaque;
+    printf("read_rdram_fb address:%#08x \n", address);
     pre_framebuffer_read(fb, address);
     read_rdram_dram(fb->rdram, address, value);
 }
 
 void write_rdram_fb(void* opaque, uint32_t address, uint32_t value, uint32_t mask)
 {
+    printf("write_rdram_fb address:%#08x \n", address);
     struct fb* fb = (struct fb*)opaque;
     write_rdram_dram(fb->rdram, address, value, mask);
 
@@ -181,6 +183,7 @@ void write_rdram_fb(void* opaque, uint32_t address, uint32_t value, uint32_t mas
 
 void protect_framebuffers(struct fb* fb)
 {
+    // printf("protect_framebuffers\n");
     size_t i, j;
     struct mem_mapping fb_mapping = { 0, 0, M64P_MEM_RDRAM, { fb, RW(rdram_fb) } };
 

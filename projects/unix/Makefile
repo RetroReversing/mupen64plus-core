@@ -458,7 +458,12 @@ OBJDIR = _obj$(POSTFIX)
 SUBDIR = ../../subprojects
 
 # list of required source files for compilation
+# $(SRCDIR)/cdl/CDL_MemoryMapper.cpp 
 SOURCE = \
+    $(SRCDIR)/cdl/CDL_interface.cpp \
+    $(SRCDIR)/cdl/jarowinkler.c \
+    $(SRCDIR)/cdl/CDL_JSON.cpp \
+    $(SRCDIR)/cdl/CDL_Util.cpp \
     $(SRCDIR)/civetweb/src/civetweb.c \
     $(SRCDIR)/api/callbacks.c \
     $(SRCDIR)/api/common.c \
@@ -503,7 +508,7 @@ SOURCE = \
     $(SRCDIR)/device/r4300/tlb.c \
     $(SRCDIR)/device/rcp/ai/ai_controller.c \
     $(SRCDIR)/device/rcp/mi/mi_controller.c \
-    $(SRCDIR)/device/rcp/pi/pi_controller.c \
+    $(SRCDIR)/device/rcp/pi/pi_controller.cpp \
     $(SRCDIR)/device/rcp/rdp/fb.c \
     $(SRCDIR)/device/rcp/rdp/rdp_core.c \
     $(SRCDIR)/device/rcp/ri/ri_controller.c \
@@ -537,6 +542,8 @@ SOURCE += \
     $(SUBDIR)/xxhash/xxhash.c
 CFLAGS += -I$(SUBDIR)/xxhash
 
+CFLAGS += -I/usr/local/opt/nlohmann_json/include
+CXXFLAGS += -I/usr/local/opt/nlohmann_json/include -std=c++11
 
 ifeq ("$(OS)","MINGW")
 SOURCE += \
@@ -641,7 +648,7 @@ ifeq ($(DEBUGGER), 1)
     $(SRCDIR)/debugger/dbg_decoder.c \
     $(SRCDIR)/debugger/dbg_memory.c \
     $(SRCDIR)/debugger/dbg_breakpoints.c
-  LDLIBS += -lopcodes -lbfd
+  LDLIBS += -lopcodes -lbfd -L/usr/local/opt/binutils/lib -liberty -lintl -liconv
 
   # UGLY libopcodes version check (we check for > 2.28)
   LIBOPCODES_VERSION := $(shell $(STRINGS) --version | head -n1 | rev | cut -d ' ' -f1 | rev)

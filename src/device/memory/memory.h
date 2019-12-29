@@ -61,9 +61,10 @@ struct memory
     struct mem_handler dbg_handler;
 #endif
 };
-
+void cdl_log_masked_write(uint32_t* dst, uint32_t dst2);
 static osal_inline void masked_write(uint32_t* dst, uint32_t value, uint32_t mask)
 {
+    cdl_log_masked_write(dst, (*dst & ~mask) | (value & mask));
     *dst = (*dst & ~mask) | (value & mask);
 }
 
@@ -72,18 +73,24 @@ void init_memory(struct memory* mem,
                  void* base,
                  struct mem_handler* dbg_handler);
 
+void cdl_log_get_mem_handler(uint32_t address);
 static osal_inline const struct mem_handler* mem_get_handler(const struct memory* mem, uint32_t address)
 {
+    cdl_log_get_mem_handler(address);
+    // printf("mem_get_handler address: %#008x", address);
     return &mem->handlers[address >> 16];
 }
 
+void cdl_log_mem_read32(uint32_t address);
 static osal_inline void mem_read32(const struct mem_handler* handler, uint32_t address, uint32_t* value)
 {
+    cdl_log_mem_read32(address);
     handler->read32(handler->opaque, address, value);
 }
-
+void cdl_log_mem_write32(uint32_t address);
 static osal_inline void mem_write32(const struct mem_handler* handler, uint32_t address, uint32_t value, uint32_t mask)
 {
+    cdl_log_mem_write32(address);
     handler->write32(handler->opaque, address, value, mask);
 }
 
@@ -91,7 +98,7 @@ void apply_mem_mapping(struct memory* mem, const struct mem_mapping* mapping);
 
 void* init_mem_base(void);
 void release_mem_base(void* mem_base);
-uint32_t* mem_base_u32(void* mem_base, uint32_t address);
+uint32_t* mem_base_u32(void* mem_base, uint32_t address, int isBootRom);
 
 void read_with_bp_checks(void* opaque, uint32_t address, uint32_t* value);
 void write_with_bp_checks(void* opaque, uint32_t address, uint32_t value, uint32_t mask);
