@@ -1,0 +1,3 @@
+[submodule "libRetroReversing"]
+	path = libRetroReversing
+	url = https://github.com/RetroReversing/libRetroReversing.git
