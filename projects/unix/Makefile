@@ -458,13 +458,16 @@ OBJDIR = _obj$(POSTFIX)
 SUBDIR = ../../subprojects
 
 # list of required source files for compilation
-# $(SRCDIR)/cdl/CDL_MemoryMapper.cpp 
 SOURCE = \
-    $(SRCDIR)/cdl/CDL_interface.cpp \
-    $(SRCDIR)/cdl/jarowinkler.c \
-    $(SRCDIR)/cdl/CDL_JSON.cpp \
-    $(SRCDIR)/cdl/CDL_Util.cpp \
-    $(SRCDIR)/civetweb/src/civetweb.c \
+    $(SRCDIR)/../libRetroReversing/cdl/CDL_interface.cpp \
+    $(SRCDIR)/../libRetroReversing/cdl/CDL_JSON.cpp \
+    $(SRCDIR)/../libRetroReversing/cdl/CDL_Util.cpp \
+    $(SRCDIR)/../libRetroReversing/cdl/InputLogger.cpp \
+    $(SRCDIR)/../libRetroReversing/cdl/Setup.cpp \
+    $(SRCDIR)/../libRetroReversing/cdl/Main.cpp \
+    $(SRCDIR)/../libRetroReversing/civetweb/src/libRRWebInterface.cpp \
+    $(SRCDIR)/../libRetroReversing/consoles/N64.cpp \
+    $(SRCDIR)/../libRetroReversing/cdl/jarowinkler.c \
     $(SRCDIR)/api/callbacks.c \
     $(SRCDIR)/api/common.c \
     $(SRCDIR)/api/config.c \

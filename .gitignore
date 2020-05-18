@@ -1,5 +1,7 @@
 /projects/unix/_obj*/
 /projects/unix/libmupen64plus*.so*
+*.o
+*.d
 src/asm_defines/
 *.dylib
 projects/unix/libmupen64plus.dylib
