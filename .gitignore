@@ -8,3 +8,4 @@ projects/unix/libmupen64plus.dylib
 src/asm_defines/asm_defines_gas.h
 projects/.DS_Store
 src/asm_defines/asm_defines_nasm.h
+.DS_Store
