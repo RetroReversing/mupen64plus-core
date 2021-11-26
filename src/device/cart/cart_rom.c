@@ -121,7 +121,7 @@ unsigned int cart_rom_dma_write(void* opaque, uint8_t* dram, uint32_t dram_addr,
             dram[(dram_addr+i)^S8] = 0;
         }
     }
-    cdl_log_cart_reg_access();
+    // cdl_log_cart_reg_access();
 
     /* invalidate cached code */
     invalidate_r4300_cached_code(cart_rom->r4300, 0x80000000 + dram_addr, length);

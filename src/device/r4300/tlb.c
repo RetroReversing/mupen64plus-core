@@ -64,7 +64,7 @@ void tlb_unmap(struct tlb* tlb, size_t entry)
 }
 
 
-void log_tlb_entry(const struct tlb_entry* e, size_t entry);
+// void log_tlb_entry(const struct tlb_entry* e, size_t entry);
 
 // The Translation Lookaside Buffer has 32 entries
 // entry is which of the 32 entries we want

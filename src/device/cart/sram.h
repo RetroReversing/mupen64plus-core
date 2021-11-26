@@ -23,6 +23,7 @@
 #define M64P_DEVICE_PI_SRAM_H
 
 #include <stdint.h>
+#include <stdio.h>
 
 struct storage_backend_interface;
 

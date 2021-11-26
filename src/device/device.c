@@ -35,6 +35,10 @@
 
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof((x)[0]))
 
+//libRR start
+void cdl_log_memory_mappings(struct mem_mapping* mappings, uint32_t number_of_mappings);
+// libRR end
+
 
 static void read_open_bus(void* opaque, uint32_t address, uint32_t* value)
 {
@@ -152,7 +156,7 @@ void init_device(struct device* dev,
         { A(MM_CART_ROM, rom_size-1), M64P_MEM_ROM, { &dev->cart.cart_rom, RW(cart_rom) } },
         { A(MM_PIF_MEM, 0xffff), M64P_MEM_PIF, { &dev->pif, RW(pif_ram) } }
     };
-    cdl_log_memory_mappings(mappings, 18);
+    // cdl_log_memory_mappings(mappings, 18);
 
     /* init and map DD if present */
     if (dd_rom_size > 0) {

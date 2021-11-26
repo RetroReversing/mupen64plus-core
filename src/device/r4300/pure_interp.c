@@ -39,8 +39,6 @@
 
 static void InterpretOpcode(struct r4300_core* r4300);
 
-//int cdl_log_jump(int take_jump, uint32_t jump_target);
-
 #define DECLARE_R4300
 #define PCADDR r4300->interp_PC.addr
 #define ADD_TO_PC(x) r4300->interp_PC.addr += x*4;
@@ -51,7 +49,8 @@ static void InterpretOpcode(struct r4300_core* r4300);
       int take_jump = (condition); \
       const uint32_t jump_target = (destination); \
       int64_t *link_register = (link); \
-	  take_jump = cdl_log_jump(take_jump, jump_target, *r4300_pc(r4300)); \
+	  uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300)); \
+	  take_jump = cdl_log_jump(take_jump, jump_target, op_address, *r4300_pc(r4300), r4300_regs(r4300)[31]); \
       if (cop1 && check_cop1_unusable(r4300)) return; \
       if (link_register != &r4300_regs(r4300)[0]) \
       { \
@@ -162,7 +161,7 @@ static void InterpretOpcode(struct r4300_core* r4300);
         r4300->delay_slot=0; \
         if (take_jump && !r4300->skip_jump) \
         { \
-		cdl_log_jump_return(take_jump, jump_target, *r4300_pc(r4300), r4300_regs(r4300)); \
+		cdl_log_jump_return(take_jump, jump_target, *r4300_pc(r4300), r4300_regs(r4300)[31], r4300_regs(r4300), r4300);\
           r4300->interp_PC.addr = jump_target; \
         } \
       } \
@@ -264,8 +263,6 @@ extern void CDL_PrintMemoryLoc(uint32_t address);
 int smallestFoundEver = 2751463488;
 uint32_t largest = -1;
 uint32_t smallest = -1;
-
-void cdl_log_opcode(uint32_t program_counter, uint32_t* op_address);
 
 void InterpretOpcode(struct r4300_core* r4300)
 {

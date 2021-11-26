@@ -137,7 +137,7 @@ endif
 
 # base CFLAGS, LDLIBS, and LDFLAGS
 OPTFLAGS ?= -O3 -flto
-WARNFLAGS ?= -Wall
+WARNFLAGS ?= -w # -Wall
 CFLAGS += -ffast-math -fno-strict-aliasing -fvisibility=hidden -I../../src -I../../src/asm_defines -DM64P_PARALLEL
 CXXFLAGS += -fvisibility-inlines-hidden
 LDLIBS +=  -lm
@@ -204,9 +204,9 @@ ifeq ($(OS), OSX)
 
   ifeq ($(CPU), X86)
     ifeq ($(ARCH_DETECTED), 64BITS)
-      CFLAGS += -pipe -arch x86_64 -mmacosx-version-min=10.14 -isysroot $(OSX_SDK_PATH)
+      CFLAGS += -pipe -arch x86_64 -mmacosx-version-min=10.15 -isysroot $(OSX_SDK_PATH)
     else
-      CFLAGS += -pipe -mmmx -msse -arch i686 -mmacosx-version-min=10.14 -isysroot $(OSX_SDK_PATH)
+      CFLAGS += -pipe -mmmx -msse -arch i686 -mmacosx-version-min=10.15 -isysroot $(OSX_SDK_PATH)
       ifneq ($(PROFILE), 1)
         CFLAGS += -fomit-frame-pointer
       endif

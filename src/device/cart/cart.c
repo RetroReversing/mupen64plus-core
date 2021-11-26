@@ -28,6 +28,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <stdio.h>
 
 static void process_cart_command(void* jbd,
     const uint8_t* tx, const uint8_t* tx_buf,

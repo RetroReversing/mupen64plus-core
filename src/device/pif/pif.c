@@ -25,6 +25,7 @@
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "api/callbacks.h"
 #include "api/m64p_plugin.h"

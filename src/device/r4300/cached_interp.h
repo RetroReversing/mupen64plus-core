@@ -27,6 +27,10 @@
 
 #include "idec.h"
 
+// libRR start
+#include "../../../libRetroReversing/include/libRR_c.h"
+// libRR end
+
 struct r4300_core;
 struct cached_interp;
 struct r4300_idec;
