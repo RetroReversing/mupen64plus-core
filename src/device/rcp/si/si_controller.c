@@ -83,6 +83,7 @@ static void copy_pif_rdram(struct si_controller* si)
     }
 }
 
+void cdl_log_si_reg_access();
 static void dma_si_write(struct si_controller* si)
 {
     cdl_log_si_reg_access();

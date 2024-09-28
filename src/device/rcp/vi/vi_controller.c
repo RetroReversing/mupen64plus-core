@@ -75,6 +75,7 @@ void poweron_vi(struct vi_controller* vi)
     vi->count_per_scanline = 0;
 }
 
+void cdl_common_log_tag(const char* tag);
 void read_vi_regs(void* opaque, uint32_t address, uint32_t* value)
 {
     cdl_common_log_tag("_readViRegs");

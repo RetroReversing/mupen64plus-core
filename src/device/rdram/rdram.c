@@ -227,6 +227,7 @@ void write_rdram_regs(void* opaque, uint32_t address, uint32_t value, uint32_t m
 
 // void cdl_log_rdram_read(uint32_t address);
 // void cdl_log_rdram_write(uint32_t address, uint32_t value, uint32_t mask);
+void cdl_common_log_tag(const char* tag);
 
 void read_rdram_dram(void* opaque, uint32_t address, uint32_t* value)
 {

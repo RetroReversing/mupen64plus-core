@@ -1,3 +1,18 @@
+# Reversing Emulator
+
+## MacOSX Build instructions
+```bash
+git clone git@github.com:RetroReversing/mupen64plus-core.git
+git submodule init 
+git submodule update
+cd projects/unix 
+make all
+```
+
+
+
+
+---
 # Mupen64Plus-Core README
 
 [![TravisCI Build Status](https://travis-ci.org/mupen64plus/mupen64plus-core.svg?branch=master)](https://travis-ci.org/mupen64plus/mupen64plus-core) 

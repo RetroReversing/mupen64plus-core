@@ -82,6 +82,7 @@ static osal_inline const struct mem_handler* mem_get_handler(const struct memory
 }
 
 void cdl_log_mem_read32(uint32_t address);
+void cdl_log_mem_read(const uint32_t lsaddr, uint32_t pc);
 static osal_inline void mem_read32(const struct mem_handler* handler, uint32_t address, uint32_t* value)
 {
     cdl_log_mem_read32(address);

@@ -187,6 +187,7 @@ void poweron_rsp(struct rsp_core* sp)
     sp->regs[SP_STATUS_REG] = 1;
 }
 
+void cdl_common_log_tag(const char* tag);
 
 void read_rsp_mem(void* opaque, uint32_t address, uint32_t* value)
 {

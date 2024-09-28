@@ -36,6 +36,7 @@ void poweron_ri(struct ri_controller* ri)
     memset(ri->regs, 0, RI_REGS_COUNT*sizeof(uint32_t));
 }
 
+void cdl_common_log_tag(const char* tag);
 
 void read_ri_regs(void* opaque, uint32_t address, uint32_t* value)
 {

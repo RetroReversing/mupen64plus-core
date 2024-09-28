@@ -77,6 +77,7 @@ void poweron_mi(struct mi_controller* mi)
     mi->regs[MI_VERSION_REG] = 0x02020102;
 }
 
+void cdl_log_mi_reg_access();
 void read_mi_regs(void* opaque, uint32_t address, uint32_t* value)
 {
     // MIPS Interface? Memory Interface?
@@ -87,6 +88,7 @@ void read_mi_regs(void* opaque, uint32_t address, uint32_t* value)
     *value = mi->regs[reg];
 }
 
+void cdl_log_mi_reg_write();
 void write_mi_regs(void* opaque, uint32_t address, uint32_t value, uint32_t mask)
 {
     cdl_log_mi_reg_write();

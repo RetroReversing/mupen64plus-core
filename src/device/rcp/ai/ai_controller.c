@@ -69,6 +69,7 @@ static unsigned int get_dma_duration(struct ai_controller* ai)
     return ai->regs[AI_LEN_REG] * (cpu_counts_per_sec / (bytes_per_sample * samples_per_sec));
 }
 
+void cdl_log_audio_reg_access();
 
 static void do_dma(struct ai_controller* ai, struct ai_dma* dma)
 {
@@ -168,7 +169,7 @@ void init_ai(struct ai_controller* ai,
 
 void poweron_ai(struct ai_controller* ai)
 {
-    printf("poweron_ai AI_REGS_COUNT:%#08x AI_DMA_FIFO_SIZE:%#08x \n", AI_REGS_COUNT, AI_DMA_FIFO_SIZE);
+    // printf("poweron_ai AI_REGS_COUNT:%#08x AI_DMA_FIFO_SIZE:%#08x \n", AI_REGS_COUNT, AI_DMA_FIFO_SIZE);
 
     memset(ai->regs, 0, AI_REGS_COUNT*sizeof(uint32_t));
     memset(ai->fifo, 0, AI_DMA_FIFO_SIZE*sizeof(struct ai_dma));
@@ -241,6 +242,8 @@ void write_ai_regs(void* opaque, uint32_t address, uint32_t value, uint32_t mask
     masked_write(&ai->regs[reg], value, mask);
 }
 void printWords(uint8_t* mem, uint32_t cartAddr, uint32_t length);
+void cdl_finish_ai_dma(uint32_t a);
+void cdl_clear_dma_log();
 void ai_end_of_dma_event(void* opaque)
 {
     struct ai_controller* ai = (struct ai_controller*)opaque;
