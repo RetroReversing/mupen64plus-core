@@ -39,6 +39,8 @@ CoreOverrideVidExt;
 CoreShutdown;
 CoreStartup;
 DebugBreakpointCommand;
+DecompGetViCount;
+DecompSetViHook;
 DebugBreakpointLookup;
 DebugBreakpointTriggeredBy;
 DebugDecodeOp;

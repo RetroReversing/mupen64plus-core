@@ -896,8 +896,16 @@ static void pause_loop(void)
 
 /* called on vertical interrupt.
  * Allow the core to perform various things */
+/* decompdecomp: vertical interrupts since boot, and a hook the frontend runs at each (input and dumps by VI) */
+static unsigned int l_DecompViCount = 0;
+static void (*l_DecompViHook)(unsigned int) = NULL;
+EXPORT unsigned int CALL DecompGetViCount(void) { return l_DecompViCount; }
+EXPORT void CALL DecompSetViHook(void (*hook)(unsigned int)) { l_DecompViHook = hook; }
+
 void new_vi(void)
 {
+    l_DecompViCount++;
+    if (l_DecompViHook) l_DecompViHook(l_DecompViCount);
 #if defined(PROFILE)
     timed_sections_refresh();
 #endif
