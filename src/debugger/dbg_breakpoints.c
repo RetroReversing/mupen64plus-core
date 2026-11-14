@@ -33,6 +33,29 @@
 int g_NumBreakpoints=0;
 m64p_breakpoint g_Breakpoints[BREAKPOINTS_MAX_NUMBER];
 
+/* Execution breakpoints are checked before every instruction. With thousands of them (a frontend stopping at every
+   function of a game once), looking through the list each time would crawl, so each enabled single-address
+   execution breakpoint is also counted in a table indexed by its word in an 8 MB window: an instruction whose word
+   counts none has no breakpoint, and the list is searched only on a hit, or while a range breakpoint exists. */
+#define EXEC_WORDS (1u << 21)
+static uint8_t exec_count[EXEC_WORDS];
+static int exec_ranges;
+
+static void count_exec(const m64p_breakpoint *bpt, int delta)
+{
+    if (!BPT_CHECK_FLAG((*bpt), M64P_BKP_FLAG_EXEC))
+        return;
+    if (bpt->address != bpt->endaddr) {
+        exec_ranges += delta;
+        return;
+    }
+    uint32_t i = (bpt->address >> 2) & (EXEC_WORDS - 1);
+    if (delta > 0 && exec_count[i] < 255)
+        exec_count[i]++;
+    else if (delta < 0 && exec_count[i] > 0 && exec_count[i] < 255)
+        exec_count[i]--; /* (255: saturated, never counted down) */
+}
+
 int add_breakpoint(struct memory* mem, uint32_t address)
 {
     if (g_NumBreakpoints == BREAKPOINTS_MAX_NUMBER) {
@@ -70,6 +93,9 @@ void enable_breakpoint(struct memory* mem, int bpt)
     m64p_breakpoint *curBpt = g_Breakpoints + bpt;
     uint64_t bptAddr;
 
+    if (!BPT_CHECK_FLAG((*curBpt), M64P_BKP_FLAG_ENABLED))
+        count_exec(curBpt, 1);
+
     if (BPT_CHECK_FLAG((*curBpt), M64P_BKP_FLAG_READ)) {
         for (bptAddr = curBpt->address; bptAddr <= (curBpt->endaddr | 0xFFFF); bptAddr+=0x10000)
             if (lookup_breakpoint((uint32_t) bptAddr & 0xFFFF0000, 0x10000, M64P_BKP_FLAG_ENABLED | M64P_BKP_FLAG_READ) == -1)
@@ -90,6 +116,8 @@ void disable_breakpoint(struct memory* mem, int bpt)
     m64p_breakpoint *curBpt = g_Breakpoints + bpt;
     uint64_t bptAddr;
 
+    if (BPT_CHECK_FLAG((*curBpt), M64P_BKP_FLAG_ENABLED))
+        count_exec(curBpt, -1);
     BPT_CLEAR_FLAG(g_Breakpoints[bpt], M64P_BKP_FLAG_ENABLED);
 
     if (BPT_CHECK_FLAG((*curBpt), M64P_BKP_FLAG_READ)) {
@@ -172,6 +200,8 @@ int lookup_breakpoint(uint32_t address, uint32_t size, uint32_t flags)
 
 int check_breakpoints(uint32_t address)
 {
+    if (exec_ranges == 0 && exec_count[(address >> 2) & (EXEC_WORDS - 1)] == 0)
+        return -1;
     return lookup_breakpoint(address, 1, M64P_BKP_FLAG_ENABLED | M64P_BKP_FLAG_EXEC);
 }
 
